@@ -1,150 +1,122 @@
 
-(function () {
+import window from 'window';
+import _ from '_';
+import ko from 'ko';
+import progressJs from 'progressJs';
 
-	'use strict';
+import {root} from 'Common/Links';
+import {getNotification} from 'Common/Translator';
+import {StorageResultType, Notification} from 'Common/Enums';
+import {pInt, isNormal, isArray, inArray, isUnd} from 'Common/Utils';
 
-	var
-		window = require('window'),
-		_ = require('_'),
-		ko = require('ko'),
-		SimplePace = require('SimplePace'),
+import * as Settings from 'Storage/Settings';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Links = require('Common/Links'),
-		Translator = require('Common/Translator'),
+import AppStore from 'Stores/Admin/App';
+import CapaStore from 'Stores/Admin/Capa';
+import DomainStore from 'Stores/Admin/Domain';
+import PluginStore from 'Stores/Admin/Plugin';
+import LicenseStore from 'Stores/Admin/License';
+import PackageStore from 'Stores/Admin/Package';
+import CoreStore from 'Stores/Admin/Core';
+import Remote from 'Remote/Admin/Ajax';
 
-		Settings = require('Storage/Settings'),
-		AppStore = require('Stores/Admin/App'),
-		DomainStore = require('Stores/Admin/Domain'),
-		PluginStore = require('Stores/Admin/Plugin'),
-		LicenseStore = require('Stores/Admin/License'),
-		PackageStore = require('Stores/Admin/Package'),
-		CoreStore = require('Stores/Admin/Core'),
-		Remote = require('Storage/Admin/Remote'),
+import {SettingsAdminScreen} from 'Screen/Admin/Settings';
+import {LoginAdminScreen} from 'Screen/Admin/Login';
 
-		kn = require('Knoin/Knoin'),
-		AbstractApp = require('App/Abstract')
-	;
+import {hideLoading, routeOff, setHash, startScreens} from 'Knoin/Knoin';
+import {AbstractApp} from 'App/Abstract';
 
-	/**
-	 * @constructor
-	 * @extends AbstractApp
-	 */
-	function AdminApp()
-	{
-		AbstractApp.call(this, Remote);
+class AdminApp extends AbstractApp
+{
+	constructor() {
+		super(Remote);
 	}
 
-	_.extend(AdminApp.prototype, AbstractApp.prototype);
-
-	AdminApp.prototype.remote = function ()
-	{
+	remote() {
 		return Remote;
-	};
+	}
 
-	AdminApp.prototype.reloadDomainList = function ()
-	{
+	reloadDomainList() {
 		DomainStore.domains.loading(true);
-
-		Remote.domainList(function (sResult, oData) {
+		Remote.domainList((result, data) => {
 			DomainStore.domains.loading(false);
-			if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
+			if (StorageResultType.Success === result && data && data.Result)
 			{
-				var aList = _.map(oData.Result, function (bEnabled, sName) {
-					return {
-						'name': sName,
-						'disabled': ko.observable(!bEnabled),
-						'deleteAccess': ko.observable(false)
-					};
-				}, this);
-
-				DomainStore.domains(aList);
+				DomainStore.domains(_.map(data.Result, ([enabled, alias], name) => ({
+					name: name,
+					disabled: ko.observable(!enabled),
+					alias: alias,
+					deleteAccess: ko.observable(false)
+				})));
 			}
 		});
-	};
+	}
 
-	AdminApp.prototype.reloadPluginList = function ()
-	{
+	reloadPluginList() {
 		PluginStore.plugins.loading(true);
-
-		Remote.pluginList(function (sResult, oData) {
-
+		Remote.pluginList((result, data) => {
 			PluginStore.plugins.loading(false);
-
-			if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
+			if (StorageResultType.Success === result && data && data.Result)
 			{
-				var aList = _.map(oData.Result, function (oItem) {
-					return {
-						'name': oItem['Name'],
-						'disabled': ko.observable(!oItem['Enabled']),
-						'configured': ko.observable(!!oItem['Configured'])
-					};
-				}, this);
-
-				PluginStore.plugins(aList);
+				PluginStore.plugins(_.map(data.Result, (item) => ({
+					name: item.Name,
+					disabled: ko.observable(!item.Enabled),
+					configured: ko.observable(!!item.Configured)
+				})));
 			}
 		});
-	};
+	}
 
-	AdminApp.prototype.reloadPackagesList = function ()
-	{
+	reloadPackagesList() {
 		PackageStore.packages.loading(true);
 		PackageStore.packagesReal(true);
-
-		Remote.packagesList(function (sResult, oData) {
-
+		Remote.packagesList((result, data) => {
 			PackageStore.packages.loading(false);
-
-			if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
+			if (StorageResultType.Success === result && data && data.Result)
 			{
-				PackageStore.packagesReal(!!oData.Result.Real);
-				PackageStore.packagesMainUpdatable(!!oData.Result.MainUpdatable);
+				PackageStore.packagesReal(!!data.Result.Real);
+				PackageStore.packagesMainUpdatable(!!data.Result.MainUpdatable);
 
-				var
-					aList = [],
-					aLoading = {}
-				;
+				let list = [];
+				const loading = {};
 
-				_.each(PackageStore.packages(), function (oItem) {
-					if (oItem && oItem['loading']())
+				_.each(PackageStore.packages(), (item) => {
+					if (item && item.loading())
 					{
-						aLoading[oItem['file']] = oItem;
+						loading[item.file] = item;
 					}
 				});
 
-				if (Utils.isArray(oData.Result.List))
+				if (isArray(data.Result.List))
 				{
-					aList = _.compact(_.map(oData.Result.List, function (oItem) {
-						if (oItem)
+					list = _.compact(_.map(data.Result.List, (item) => {
+						if (item)
 						{
-							oItem['loading'] = ko.observable(!Utils.isUnd(aLoading[oItem['file']]));
-							return 'core' === oItem['type'] && !oItem['canBeInstalled'] ? null : oItem;
+							item.loading = ko.observable(!isUnd(loading[item.file]));
+							return 'core' === item.type && !item.canBeInstalled ? null : item;
 						}
 						return null;
 					}));
 				}
 
-				PackageStore.packages(aList);
+				PackageStore.packages(list);
 			}
 			else
 			{
 				PackageStore.packagesReal(false);
 			}
 		});
-	};
+	}
 
-	AdminApp.prototype.updateCoreData = function ()
-	{
+	updateCoreData() {
 		CoreStore.coreUpdating(true);
-		Remote.updateCoreData(function (sResult, oData) {
-
+		Remote.updateCoreData((result, data) => {
 			CoreStore.coreUpdating(false);
+			CoreStore.coreVersion('');
 			CoreStore.coreRemoteVersion('');
 			CoreStore.coreRemoteRelease('');
 			CoreStore.coreVersionCompare(-2);
-
-			if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
+			if (StorageResultType.Success === result && data && data.Result)
 			{
 				CoreStore.coreReal(true);
 				window.location.reload();
@@ -154,79 +126,71 @@
 				CoreStore.coreReal(false);
 			}
 		});
+	}
 
-	};
-
-	AdminApp.prototype.reloadCoreData = function ()
-	{
+	reloadCoreData() {
 		CoreStore.coreChecking(true);
 		CoreStore.coreReal(true);
-
-		Remote.coreData(function (sResult, oData) {
-
+		Remote.coreData((result, data) => {
 			CoreStore.coreChecking(false);
-
-			if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
+			if (StorageResultType.Success === result && data && data.Result)
 			{
-				CoreStore.coreReal(!!oData.Result.Real);
-				CoreStore.coreChannel(oData.Result.Channel || 'stable');
-				CoreStore.coreType(oData.Result.Type || 'stable');
-				CoreStore.coreUpdatable(!!oData.Result.Updatable);
-				CoreStore.coreAccess(!!oData.Result.Access);
-				CoreStore.coreRemoteVersion(oData.Result.RemoteVersion || '');
-				CoreStore.coreRemoteRelease(oData.Result.RemoteRelease || '');
-				CoreStore.coreVersionCompare(Utils.pInt(oData.Result.VersionCompare));
+				CoreStore.coreReal(!!data.Result.Real);
+				CoreStore.coreChannel(data.Result.Channel || 'stable');
+				CoreStore.coreType(data.Result.Type || 'stable');
+				CoreStore.coreUpdatable(!!data.Result.Updatable);
+				CoreStore.coreAccess(!!data.Result.Access);
+				CoreStore.coreWarning(!!data.Result.Warning);
+				CoreStore.coreVersion(data.Result.Version || '');
+				CoreStore.coreRemoteVersion(data.Result.RemoteVersion || '');
+				CoreStore.coreRemoteRelease(data.Result.RemoteRelease || '');
+				CoreStore.coreVersionCompare(pInt(data.Result.VersionCompare));
 			}
 			else
 			{
 				CoreStore.coreReal(false);
 				CoreStore.coreChannel('stable');
 				CoreStore.coreType('stable');
+				CoreStore.coreWarning(false);
+				CoreStore.coreVersion('');
 				CoreStore.coreRemoteVersion('');
 				CoreStore.coreRemoteRelease('');
 				CoreStore.coreVersionCompare(-2);
 			}
 		});
-	};
+	}
 
 	/**
-	 *
-	 * @param {boolean=} bForce = false
+	 * @param {boolean=} force = false
 	 */
-	AdminApp.prototype.reloadLicensing = function (bForce)
-	{
-		bForce = Utils.isUnd(bForce) ? false : !!bForce;
-
+	reloadLicensing(force = false) {
 		LicenseStore.licensingProcess(true);
 		LicenseStore.licenseError('');
-
-		Remote.licensing(function (sResult, oData) {
+		Remote.licensing((result, data) => {
 			LicenseStore.licensingProcess(false);
-			if (Enums.StorageResultType.Success === sResult && oData && oData.Result && Utils.isNormal(oData.Result['Expired']))
+			if (StorageResultType.Success === result && data && data.Result && isNormal(data.Result.Expired))
 			{
 				LicenseStore.licenseValid(true);
-				LicenseStore.licenseExpired(Utils.pInt(oData.Result['Expired']));
+				LicenseStore.licenseExpired(pInt(data.Result.Expired));
 				LicenseStore.licenseError('');
-
 				LicenseStore.licensing(true);
-
 				AppStore.prem(true);
 			}
 			else
 			{
-				if (oData && oData.ErrorCode && -1 < Utils.inArray(Utils.pInt(oData.ErrorCode), [
-					Enums.Notification.LicensingServerIsUnavailable,
-					Enums.Notification.LicensingExpired
+				if (data && data.ErrorCode && -1 < inArray(pInt(data.ErrorCode), [
+					Notification.LicensingServerIsUnavailable,
+					Notification.LicensingExpired
 				]))
 				{
-					LicenseStore.licenseError(Translator.getNotification(Utils.pInt(oData.ErrorCode)));
+					LicenseStore.licenseError(getNotification(pInt(data.ErrorCode)));
 					LicenseStore.licensing(true);
 				}
 				else
 				{
-					if (Enums.StorageResultType.Abort === sResult)
+					if (StorageResultType.Abort === result)
 					{
-						LicenseStore.licenseError(Translator.getNotification(Enums.Notification.LicensingServerIsUnavailable));
+						LicenseStore.licenseError(getNotification(Notification.LicensingServerIsUnavailable));
 						LicenseStore.licensing(true);
 					}
 					else
@@ -235,50 +199,58 @@
 					}
 				}
 			}
-		}, bForce);
-	};
+		}, force);
+	}
 
-	AdminApp.prototype.bootstart = function ()
-	{
-		AbstractApp.prototype.bootstart.call(this);
-
-		require('Stores/Admin/App').populate();
-		require('Stores/Admin/Capa').populate();
-
-		kn.hideLoading();
-
-		if (!Settings.settingsGet('AllowAdminPanel'))
+	bootend(bootendCallback = null) {
+		if (progressJs)
 		{
-			kn.routeOff();
-			kn.setHash(Links.root(), true);
-			kn.routeOff();
+			progressJs.end();
+		}
 
-			_.defer(function () {
+		if (bootendCallback)
+		{
+			bootendCallback();
+		}
+	}
+
+	bootstart() {
+
+		super.bootstart();
+
+		AppStore.populate();
+		CapaStore.populate();
+
+		hideLoading();
+
+		if (!Settings.appSettingsGet('allowAdminPanel'))
+		{
+			routeOff();
+			setHash(root(), true);
+			routeOff();
+
+			_.defer(() => {
 				window.location.href = '/';
 			});
 		}
 		else
 		{
-			if (!!Settings.settingsGet('Auth'))
+			if (Settings.settingsGet('Auth'))
 			{
-				kn.startScreens([
-					require('Screen/Admin/Settings')
+				startScreens([
+					SettingsAdminScreen
 				]);
 			}
 			else
 			{
-				kn.startScreens([
-					require('Screen/Admin/Login')
+				startScreens([
+					LoginAdminScreen
 				]);
 			}
 		}
 
-		if (SimplePace)
-		{
-			SimplePace.set(100);
-		}
-	};
+		this.bootend();
+	}
+}
 
-	module.exports = new AdminApp();
-
-}());
+export default new AdminApp();

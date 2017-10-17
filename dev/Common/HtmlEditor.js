@@ -1,343 +1,430 @@
 
-(function () {
+import window from 'window';
+import _ from '_';
+import $ from '$';
+import {htmlEditorDefaultConfig, htmlEditorLangsMap} from 'Common/Globals';
+import {EventKeyCode, Magics} from 'Common/Enums';
+import * as Settings from 'Storage/Settings';
 
-	'use strict';
+class HtmlEditor
+{
+	editor;
+	blurTimer = 0;
 
-	var
-		window = require('window'),
-		_ = require('_'),
+	__resizable = false;
+	__inited = false;
 
-		Globals = require('Common/Globals'),
+	onBlur = null;
+	onReady = null;
+	onModeChange = null;
 
-		Settings = require('Storage/Settings')
-	;
+	element;
+	$element;
+
+	resize;
 
 	/**
-	 * @constructor
-	 * @param {Object} oElement
-	 * @param {Function=} fOnBlur
-	 * @param {Function=} fOnReady
-	 * @param {Function=} fOnModeChange
+	 * @param {Object} element
+	 * @param {Function=} onBlur
+	 * @param {Function=} onReady
+	 * @param {Function=} onModeChange
 	 */
-	function HtmlEditor(oElement, fOnBlur, fOnReady, fOnModeChange)
+	constructor(element, onBlur = null, onReady = null, onModeChange = null)
 	{
-		this.editor = null;
-		this.iBlurTimer = 0;
-		this.fOnBlur = fOnBlur || null;
-		this.fOnReady = fOnReady || null;
-		this.fOnModeChange = fOnModeChange || null;
+		this.onBlur = onBlur;
+		this.onReady = onReady;
+		this.onModeChange = onModeChange;
 
-		this.$element = $(oElement);
+		this.element = element;
+		this.$element = $(element);
 
-		this.resize = _.throttle(_.bind(this.resize, this), 100);
+		this.resize = _.throttle(_.bind(this.resizeEditor, this), 100);
 
 		this.init();
 	}
 
-	HtmlEditor.prototype.blurTrigger = function ()
-	{
-		if (this.fOnBlur)
+	runOnBlur() {
+		if (this.onBlur)
 		{
-			var self = this;
-			window.clearTimeout(this.iBlurTimer);
-			this.iBlurTimer = window.setTimeout(function () {
-				self.fOnBlur();
-			}, 200);
+			this.onBlur();
 		}
-	};
+	}
 
-	HtmlEditor.prototype.focusTrigger = function ()
-	{
-		if (this.fOnBlur)
+	blurTrigger() {
+		if (this.onBlur)
 		{
-			window.clearTimeout(this.iBlurTimer);
+			window.clearTimeout(this.blurTimer);
+			this.blurTimer = window.setTimeout(() => {
+				this.runOnBlur();
+			}, Magics.Time200ms);
 		}
-	};
+	}
+
+	focusTrigger() {
+		if (this.onBlur)
+		{
+			window.clearTimeout(this.blurTimer);
+		}
+	}
 
 	/**
-	 * @return {boolean}
+	 * @returns {boolean}
 	 */
-	HtmlEditor.prototype.isHtml = function ()
-	{
+	isHtml() {
 		return this.editor ? 'wysiwyg' === this.editor.mode : false;
-	};
+	}
 
 	/**
-	 * @param {string} sSignature
-	 * @param {bool} bHtml
-	 * @param {bool} bInsertBefore
+	 * @returns {void}
 	 */
-	HtmlEditor.prototype.setSignature = function (sSignature, bHtml, bInsertBefore)
-	{
+	clearCachedSignature() {
 		if (this.editor)
 		{
 			this.editor.execCommand('insertSignature', {
-				'isHtml': bHtml,
-				'insertBefore': bInsertBefore,
-				'signature': sSignature
+				clearCache: true
 			});
 		}
-	};
+	}
 
 	/**
-	 * @return {boolean}
+	 * @param {string} signature
+	 * @param {bool} html
+	 * @param {bool} insertBefore
+	 * @returns {void}
 	 */
-	HtmlEditor.prototype.checkDirty = function ()
-	{
-		return this.editor ? this.editor.checkDirty() : false;
-	};
+	setSignature(signature, html, insertBefore = false) {
+		if (this.editor)
+		{
+			this.editor.execCommand('insertSignature', {
+				isHtml: html,
+				insertBefore: insertBefore,
+				signature: signature
+			});
+		}
+	}
 
-	HtmlEditor.prototype.resetDirty = function ()
-	{
+	/**
+	 * @returns {boolean}
+	 */
+	checkDirty() {
+		return this.editor ? this.editor.checkDirty() : false;
+	}
+
+	resetDirty() {
 		if (this.editor)
 		{
 			this.editor.resetDirty();
 		}
-	};
+	}
 
 	/**
-	 * @param {string} sText
-	 * @return {string}
+	 * @param {boolean=} wrapIsHtml = false
+	 * @returns {string}
 	 */
-	HtmlEditor.prototype.clearSignatureSigns = function (sText)
-	{
-		return sText.replace(/(\u0002|\u0003|\u0004|\u0005)/g, '');
-	};
+	getData(wrapIsHtml = false) {
 
-	/**
-	 * @param {boolean=} bWrapIsHtml = false
-	 * @param {boolean=} bClearSignatureSigns = false
-	 * @return {string}
-	 */
-	HtmlEditor.prototype.getData = function (bWrapIsHtml, bClearSignatureSigns)
-	{
-		var sResult = '';
+		let result = '';
 		if (this.editor)
 		{
 			try
 			{
 				if ('plain' === this.editor.mode && this.editor.plugins.plain && this.editor.__plain)
 				{
-					sResult = this.editor.__plain.getRawData();
+					result = this.editor.__plain.getRawData();
 				}
 				else
 				{
-					sResult =  bWrapIsHtml ?
+					result = wrapIsHtml ?
 						'<div data-html-editor-font-wrapper="true" style="font-family: arial, sans-serif; font-size: 13px;">' +
 							this.editor.getData() + '</div>' : this.editor.getData();
 				}
 			}
-			catch (e) {}
-
-			if (bClearSignatureSigns)
-			{
-				sResult = this.clearSignatureSigns(sResult);
-			}
+			catch (e) {} // eslint-disable-line no-empty
 		}
 
-		return sResult;
-	};
+		return result;
+	}
 
-	HtmlEditor.prototype.modeToggle = function (bPlain)
-	{
+	/**
+	 * @param {boolean=} wrapIsHtml = false
+	 * @returns {string}
+	 */
+	getDataWithHtmlMark(wrapIsHtml = false) {
+		return (this.isHtml() ? ':HTML:' : '') + this.getData(wrapIsHtml);
+	}
+
+	modeToggle(plain, resize) {
 		if (this.editor)
 		{
 			try {
-				if (bPlain)
+				if (plain)
 				{
 					if ('plain' === this.editor.mode)
 					{
 						this.editor.setMode('wysiwyg');
 					}
 				}
-				else
+				else if ('wysiwyg' === this.editor.mode)
 				{
-					if ('wysiwyg' === this.editor.mode)
-					{
-						this.editor.setMode('plain');
-					}
+					this.editor.setMode('plain');
 				}
-			} catch(e) {}
+			}
+			catch (e) {} // eslint-disable-line no-empty
 
-			this.resize();
+			if (resize)
+			{
+				this.resize();
+			}
 		}
-	};
+	}
 
-	HtmlEditor.prototype.setHtml = function (sHtml, bFocus)
-	{
-		if (this.editor)
+	setHtmlOrPlain(text, focus) {
+		if (':HTML:' === text.substr(0, 6))
 		{
+			this.setHtml(text.substr(6), focus);
+		}
+		else
+		{
+			this.setPlain(text, focus);
+		}
+	}
+
+	setHtml(html, focus) {
+		if (this.editor && this.__inited)
+		{
+			this.clearCachedSignature();
+
 			this.modeToggle(true);
 
-			try {
-				this.editor.setData(sHtml);
-			} catch (e) {}
+			html = html.replace(/<p[^>]*><\/p>/ig, '');
 
-			if (bFocus)
+			try {
+				this.editor.setData(html);
+			}
+			catch (e) {} // eslint-disable-line no-empty
+
+			if (focus)
 			{
 				this.focus();
 			}
 		}
-	};
+	}
 
-	HtmlEditor.prototype.setPlain = function (sPlain, bFocus)
-	{
-		if (this.editor)
+	replaceHtml(find, replaceHtml) {
+		if (this.editor && this.__inited && 'wysiwyg' === this.editor.mode)
 		{
+			try {
+				this.editor.setData(this.editor.getData().replace(find, replaceHtml));
+			}
+			catch (e) {} // eslint-disable-line no-empty
+		}
+	}
+
+	setPlain(plain, focus) {
+		if (this.editor && this.__inited)
+		{
+			this.clearCachedSignature();
+
 			this.modeToggle(false);
 			if ('plain' === this.editor.mode && this.editor.plugins.plain && this.editor.__plain)
 			{
-				return this.editor.__plain.setRawData(sPlain);
+				this.editor.__plain.setRawData(plain);
 			}
 			else
 			{
 				try {
-					this.editor.setData(sPlain);
-				} catch (e) {}
+					this.editor.setData(plain);
+				}
+				catch (e) {} // eslint-disable-line no-empty
 			}
 
-			if (bFocus)
+			if (focus)
 			{
 				this.focus();
 			}
 		}
-	};
+	}
 
-	HtmlEditor.prototype.init = function ()
-	{
-		if (this.$element && this.$element[0])
+	init() {
+		if (this.element && !this.editor)
 		{
-			var
-				self = this,
-				fInit = function () {
+			const
+				initFunc = () => {
 
-					var
-						oConfig = Globals.oHtmlEditorDefaultConfig,
-						sLanguage = Settings.settingsGet('Language'),
-						bSource = !!Settings.settingsGet('AllowHtmlEditorSourceButton'),
-						bBiti = !!Settings.settingsGet('AllowHtmlEditorBitiButtons')
-					;
+					const
+						config = htmlEditorDefaultConfig,
+						language = Settings.settingsGet('Language'),
+						allowSource = !!Settings.appSettingsGet('allowHtmlEditorSourceButton'),
+						biti = !!Settings.appSettingsGet('allowHtmlEditorBitiButtons');
 
-					if ((bSource || !bBiti) && !oConfig.toolbarGroups.__cfgInited)
+					if ((allowSource || !biti) && !config.toolbarGroups.__cfgInited)
 					{
-						oConfig.toolbarGroups.__cfgInited = true;
+						config.toolbarGroups.__cfgInited = true;
 
-						if (bSource)
+						if (allowSource)
 						{
-							oConfig.removeButtons = oConfig.removeButtons.replace(',Source', '');
+							config.removeButtons = config.removeButtons.replace(',Source', '');
 						}
 
-						if (!bBiti)
+						if (!biti)
 						{
-							oConfig.removePlugins += (oConfig.removePlugins ? ',' : '')  + 'bidi';
+							config.removePlugins += (config.removePlugins ? ',' : '') + 'bidi';
 						}
 					}
 
-					oConfig.enterMode = window.CKEDITOR.ENTER_BR;
-					oConfig.shiftEnterMode = window.CKEDITOR.ENTER_BR;
+					config.enterMode = window.CKEDITOR.ENTER_BR;
+					config.shiftEnterMode = window.CKEDITOR.ENTER_P;
 
-					oConfig.language = Globals.oHtmlEditorLangsMap[sLanguage] || 'en';
+					config.language = htmlEditorLangsMap[(language || 'en').toLowerCase()] || 'en';
 					if (window.CKEDITOR.env)
 					{
 						window.CKEDITOR.env.isCompatible = true;
 					}
 
-					self.editor = window.CKEDITOR.appendTo(self.$element[0], oConfig);
+					this.editor = window.CKEDITOR.appendTo(this.element, config);
 
-					self.editor.on('key', function(oEvent) {
-						if (oEvent && oEvent.data && 9 /* Tab */ === oEvent.data.keyCode)
+					this.editor.on('key', (event) => {
+						if (event && event.data && EventKeyCode.Tab === event.data.keyCode)
 						{
 							return false;
 						}
+
+						return true;
 					});
 
-					self.editor.on('blur', function() {
-						self.blurTrigger();
+					this.editor.on('blur', () => {
+						this.blurTrigger();
 					});
 
-					self.editor.on('mode', function() {
-
-						self.blurTrigger();
-
-						if (self.fOnModeChange)
+					this.editor.on('mode', () => {
+						this.blurTrigger();
+						if (this.onModeChange)
 						{
-							self.fOnModeChange('plain' !== self.editor.mode);
+							this.onModeChange('plain' !== this.editor.mode);
 						}
 					});
 
-					self.editor.on('focus', function() {
-						self.focusTrigger();
+					this.editor.on('focus', () => {
+						this.focusTrigger();
 					});
 
-					if (self.fOnReady)
+					if (window.FileReader)
 					{
-						self.editor.on('instanceReady', function () {
-
-							if (self.editor.removeMenuItem)
+						this.editor.on('drop', (event) => {
+							if (0 < event.data.dataTransfer.getFilesCount())
 							{
-								self.editor.removeMenuItem('cut');
-								self.editor.removeMenuItem('copy');
-								self.editor.removeMenuItem('paste');
+								const file = event.data.dataTransfer.getFile(0);
+								if (file && window.FileReader && event.data.dataTransfer.id &&
+									file.type && file.type.match(/^image/i))
+								{
+									const
+										id = event.data.dataTransfer.id,
+										imageId = `[img=${id}]`,
+										reader = new window.FileReader();
+
+									reader.onloadend = () => {
+										if (reader.result)
+										{
+											this.replaceHtml(imageId, `<img src="${reader.result}" />`);
+										}
+									};
+
+									reader.readAsDataURL(file);
+
+									event.data.dataTransfer.setData('text/html', imageId);
+								}
 							}
-
-							self.editor.setKeystroke(window.CKEDITOR.CTRL + 65 /* A */, 'selectAll');
-							self.editor.editable().addClass('cke_enable_context_menu');
-
-							self.fOnReady();
-							self.__resizable = true;
-							self.resize();
 						});
 					}
-				}
-			;
+
+					this.editor.on('instanceReady', () => {
+
+						if (this.editor.removeMenuItem)
+						{
+							this.editor.removeMenuItem('cut');
+							this.editor.removeMenuItem('copy');
+							this.editor.removeMenuItem('paste');
+						}
+
+						this.__resizable = true;
+						this.__inited = true;
+
+						this.resize();
+
+						if (this.onReady)
+						{
+							this.onReady();
+						}
+
+					});
+				};
 
 			if (window.CKEDITOR)
 			{
-				fInit();
+				initFunc();
 			}
 			else
 			{
-				window.__initEditor = fInit;
+				window.__initEditor = initFunc;
 			}
 		}
-	};
+	}
 
-	HtmlEditor.prototype.focus = function ()
-	{
+	focus() {
 		if (this.editor)
 		{
 			try {
 				this.editor.focus();
-			} catch (e) {}
+			}
+			catch (e) {} // eslint-disable-line no-empty
 		}
-	};
+	}
 
-	HtmlEditor.prototype.blur = function ()
-	{
+	hasFocus() {
+		if (this.editor)
+		{
+			try {
+				return !!this.editor.focusManager.hasFocus;
+			}
+			catch (e) {} // eslint-disable-line no-empty
+		}
+
+		return false;
+	}
+
+	blur() {
 		if (this.editor)
 		{
 			try {
 				this.editor.focusManager.blur(true);
-			} catch (e) {}
+			}
+			catch (e) {} // eslint-disable-line no-empty
 		}
-	};
+	}
 
-	HtmlEditor.prototype.resize = function ()
-	{
+	resizeEditor() {
 		if (this.editor && this.__resizable)
 		{
 			try {
 				this.editor.resize(this.$element.width(), this.$element.innerHeight());
-			} catch (e) {}
+			}
+			catch (e) {} // eslint-disable-line no-empty
 		}
-	};
+	}
 
-	HtmlEditor.prototype.clear = function (bFocus)
-	{
-		this.setHtml('', bFocus);
-	};
+	setReadOnly(value) {
+		if (this.editor)
+		{
+			try {
+				this.editor.setReadOnly(!!value);
+			}
+			catch (e) {} // eslint-disable-line no-empty
+		}
+	}
 
+	clear(focus) {
+		this.setHtml('', focus);
+	}
+}
 
-	module.exports = HtmlEditor;
-
-}());
+export {HtmlEditor, HtmlEditor as default};

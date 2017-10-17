@@ -1,193 +1,191 @@
 
-(function () {
+import _ from '_';
 
-	'use strict';
+import {Focused, Capa, ClientSideKeyName, Magics} from 'Common/Enums';
+import {$html, leftPanelDisabled, leftPanelType, moveAction, bMobileDevice} from 'Common/Globals';
+import {pString, pInt, decodeURI, windowResizeCallback} from 'Common/Utils';
+import {getFolderFromCacheList, getFolderFullNameRaw, getFolderInboxName} from 'Common/Cache';
+import {i18n} from 'Common/Translator';
 
-	var
-		_ = require('_'),
+import * as Events from 'Common/Events';
+import * as Settings from 'Storage/Settings';
 
-		Enums = require('Common/Enums'),
-		Globals = require('Common/Globals'),
-		Utils = require('Common/Utils'),
-		Events = require('Common/Events'),
-		Translator = require('Common/Translator'),
+import AppStore from 'Stores/User/App';
+import AccountStore from 'Stores/User/Account';
+import SettingsStore from 'Stores/User/Settings';
+import FolderStore from 'Stores/User/Folder';
+import MessageStore from 'Stores/User/Message';
 
-		AccountStore = require('Stores/User/Account'),
-		SettingsStore = require('Stores/User/Settings'),
+import {SystemDropDownMailBoxUserView} from 'View/User/MailBox/SystemDropDown';
+import {FolderListMailBoxUserView} from 'View/User/MailBox/FolderList';
+import {MessageListMailBoxUserView} from 'View/User/MailBox/MessageList';
+import {MessageViewMailBoxUserView} from 'View/User/MailBox/MessageView';
 
-		Data = require('Storage/User/Data'),
-		Cache = require('Storage/User/Cache'),
+import {getApp} from 'Helper/Apps/User';
 
-		AbstractScreen = require('Knoin/AbstractScreen')
-	;
+import {warmUpScreenPopup} from 'Knoin/Knoin';
 
-	/**
-	 * @constructor
-	 * @extends AbstractScreen
-	 */
-	function MailBoxUserScreen()
-	{
-		AbstractScreen.call(this, 'mailbox', [
-			require('View/User/MailBox/SystemDropDown'),
-			require('View/User/MailBox/FolderList'),
-			require('View/User/MailBox/MessageList'),
-			require('View/User/MailBox/MessageView')
+import {AbstractScreen} from 'Knoin/AbstractScreen';
+
+class MailBoxUserScreen extends AbstractScreen
+{
+	constructor() {
+		super('mailbox', [
+			SystemDropDownMailBoxUserView,
+			FolderListMailBoxUserView,
+			MessageListMailBoxUserView,
+			MessageViewMailBoxUserView
 		]);
-
-		this.oLastRoute = {};
 	}
 
-	_.extend(MailBoxUserScreen.prototype, AbstractScreen.prototype);
-
 	/**
-	 * @type {Object}
+	 * @returns {void}
 	 */
-	MailBoxUserScreen.prototype.oLastRoute = {};
+	updateWindowTitle() {
+		let foldersInboxUnreadCount = FolderStore.foldersInboxUnreadCount();
+		const email = AccountStore.email();
 
-	MailBoxUserScreen.prototype.setNewTitle  = function ()
-	{
-		var
-			sEmail = AccountStore.email(),
-			nFoldersInboxUnreadCount = Data.foldersInboxUnreadCount()
-		;
-
-		require('App/User').setTitle(('' === sEmail ? '' :
-			(0 < nFoldersInboxUnreadCount ? '(' + nFoldersInboxUnreadCount + ') ' : ' ') +
-				sEmail + ' - ') + Translator.i18n('TITLES/MAILBOX'));
-	};
-
-	MailBoxUserScreen.prototype.onShow = function ()
-	{
-		this.setNewTitle();
-		Globals.keyScope(Enums.KeyState.MessageList);
-	};
-
-	/**
-	 * @param {string} sFolderHash
-	 * @param {number} iPage
-	 * @param {string} sSearch
-	 * @param {boolean=} bPreview = false
-	 */
-	MailBoxUserScreen.prototype.onRoute = function (sFolderHash, iPage, sSearch, bPreview)
-	{
-		if (Utils.isUnd(bPreview) ? false : !!bPreview)
+		if (Settings.appSettingsGet('listPermanentFiltered'))
 		{
-			if (Enums.Layout.NoPreview === SettingsStore.layout() && !Data.message())
-			{
-				require('App/User').historyBack();
-			}
+			foldersInboxUnreadCount = 0;
+		}
+
+		getApp().setWindowTitle(('' === email ? '' : '' + (0 < foldersInboxUnreadCount ? '(' + foldersInboxUnreadCount + ') ' : ' ') + email + ' - ') + i18n('TITLES/MAILBOX'));
+	}
+
+	/**
+	 * @returns {void}
+	 */
+	onShow() {
+		this.updateWindowTitle();
+
+		AppStore.focusedState(Focused.None);
+		AppStore.focusedState(Focused.MessageList);
+
+		if (Settings.appSettingsGet('mobile'))
+		{
+			leftPanelDisabled(true);
+		}
+
+		if (!Settings.capa(Capa.Folders))
+		{
+			leftPanelType(Settings.capa(Capa.Composer) || Settings.capa(Capa.Contacts) ? 'short' : 'none');
 		}
 		else
 		{
-			var
-				sFolderFullNameRaw = Cache.getFolderFullNameRaw(sFolderHash),
-				oFolder = Cache.getFolderFromCacheList(sFolderFullNameRaw)
-			;
-
-			if (oFolder)
-			{
-				Data
-					.currentFolder(oFolder)
-					.messageListPage(iPage)
-					.messageListSearch(sSearch)
-				;
-
-				if (Enums.Layout.NoPreview === SettingsStore.layout() && Data.message())
-				{
-					Data.message(null);
-				}
-
-				require('App/User').reloadMessageList();
-			}
+			leftPanelType('');
 		}
-	};
-
-	MailBoxUserScreen.prototype.onStart = function ()
-	{
-		Data.folderList.subscribe(Utils.windowResizeCallback);
-		Data.messageList.subscribe(Utils.windowResizeCallback);
-		Data.message.subscribe(Utils.windowResizeCallback);
-
-		_.delay(function () {
-			SettingsStore.layout.valueHasMutated();
-		}, 50);
-
-		Events.sub('mailbox.inbox-unread-count', function (iCount) {
-
-			Data.foldersInboxUnreadCount(iCount);
-
-			var sEmail = AccountStore.email();
-
-			_.each(AccountStore.accounts(), function (oItem) {
-				if (oItem && sEmail === oItem.email)
-				{
-					oItem.count(iCount);
-				}
-			});
-		});
-
-		Data.foldersInboxUnreadCount.subscribe(function () {
-			this.setNewTitle();
-		}, this);
-
-	};
-
-	MailBoxUserScreen.prototype.onBuild = function ()
-	{
-		if (!Globals.bMobileDevice)
-		{
-			_.defer(function () {
-				require('App/User').initHorizontalLayoutResizer(Enums.ClientSideKeyName.MessageListSize);
-			});
-		}
-	};
+	}
 
 	/**
-	 * @return {Array}
+	 * @param {string} folderHash
+	 * @param {number} page
+	 * @param {string} search
+	 * @returns {void}
 	 */
-	MailBoxUserScreen.prototype.routes = function ()
-	{
-		var
-			sInboxFolderName = Cache.getFolderInboxName(),
-			fNormP = function () {
-				return [sInboxFolderName, 1, '', true];
-			},
-			fNormS = function (oRequest, oVals) {
-				oVals[0] = Utils.pString(oVals[0]);
-				oVals[1] = Utils.pInt(oVals[1]);
-				oVals[1] = 0 >= oVals[1] ? 1 : oVals[1];
-				oVals[2] = Utils.pString(oVals[2]);
+	onRoute(folderHash, page, search) {
+		let threadUid = folderHash.replace(/^(.+)~([\d]+)$/, '$2');
+		const folder = getFolderFromCacheList(getFolderFullNameRaw(folderHash.replace(/~([\d]+)$/, '')));
 
-				if ('' === oRequest)
-				{
-					oVals[0] = sInboxFolderName;
-					oVals[1] = 1;
-				}
-
-				return [decodeURI(oVals[0]), oVals[1], decodeURI(oVals[2]), false];
-			},
-			fNormD = function (oRequest, oVals) {
-				oVals[0] = Utils.pString(oVals[0]);
-				oVals[1] = Utils.pString(oVals[1]);
-
-				if ('' === oRequest)
-				{
-					oVals[0] = sInboxFolderName;
-				}
-
-				return [decodeURI(oVals[0]), 1, decodeURI(oVals[1]), false];
+		if (folder)
+		{
+			if (folderHash === threadUid)
+			{
+				threadUid = '';
 			}
-		;
+
+			FolderStore.currentFolder(folder);
+
+			MessageStore.messageListPage(page);
+			MessageStore.messageListSearch(search);
+			MessageStore.messageListThreadUid(threadUid);
+
+			getApp().reloadMessageList();
+		}
+	}
+
+	/**
+	 * @returns {void}
+	 */
+	onStart() {
+		FolderStore.folderList.subscribe(windowResizeCallback);
+
+		MessageStore.messageList.subscribe(windowResizeCallback);
+		MessageStore.message.subscribe(windowResizeCallback);
+
+		_.delay(() => SettingsStore.layout.valueHasMutated(), Magics.Time50ms);
+		_.delay(() => warmUpScreenPopup(require('View/Popup/Compose')), Magics.Time500ms);
+
+		Events.sub('mailbox.inbox-unread-count', (count) => {
+			FolderStore.foldersInboxUnreadCount(count);
+
+			const email = AccountStore.email();
+			_.each(AccountStore.accounts(), (item) => {
+				if (item && email === item.email)
+				{
+					item.count(count);
+				}
+			});
+
+			this.updateWindowTitle();
+		});
+	}
+
+	/**
+	 * @returns {void}
+	 */
+	onBuild() {
+		if (!bMobileDevice && !Settings.appSettingsGet('mobile'))
+		{
+			_.defer(() => {
+				getApp().initHorizontalLayoutResizer(ClientSideKeyName.MessageListSize);
+			});
+		}
+
+		$html.on('click', '#rl-right', () => {
+			moveAction(false);
+		});
+	}
+
+	/**
+	 * @returns {Array}
+	 */
+	routes() {
+		const
+			inboxFolderName = getFolderInboxName(),
+			fNormS = (request, vals) => {
+				vals[0] = pString(vals[0]);
+				vals[1] = pInt(vals[1]);
+				vals[1] = 0 >= vals[1] ? 1 : vals[1];
+				vals[2] = pString(vals[2]);
+
+				if ('' === request)
+				{
+					vals[0] = inboxFolderName;
+					vals[1] = 1;
+				}
+
+				return [decodeURI(vals[0]), vals[1], decodeURI(vals[2])];
+			},
+			fNormD = (request, vals) => {
+				vals[0] = pString(vals[0]);
+				vals[1] = pString(vals[1]);
+
+				if ('' === request)
+				{
+					vals[0] = inboxFolderName;
+				}
+
+				return [decodeURI(vals[0]), 1, decodeURI(vals[1])];
+			};
 
 		return [
-			[/^([a-zA-Z0-9]+)\/p([1-9][0-9]*)\/(.+)\/?$/, {'normalize_': fNormS}],
-			[/^([a-zA-Z0-9]+)\/p([1-9][0-9]*)$/, {'normalize_': fNormS}],
-			[/^([a-zA-Z0-9]+)\/(.+)\/?$/, {'normalize_': fNormD}],
-			[/^message-preview$/,  {'normalize_': fNormP}],
-			[/^([^\/]*)$/,  {'normalize_': fNormS}]
+			[/^([a-zA-Z0-9~]+)\/p([1-9][0-9]*)\/(.+)\/?$/, {'normalize_': fNormS}],
+			[/^([a-zA-Z0-9~]+)\/p([1-9][0-9]*)$/, {'normalize_': fNormS}],
+			[/^([a-zA-Z0-9~]+)\/(.+)\/?$/, {'normalize_': fNormD}],
+			[/^([^\/]*)$/, {'normalize_': fNormS}]
 		];
-	};
+	}
+}
 
-	module.exports = MailBoxUserScreen;
-
-}());
+export {MailBoxUserScreen, MailBoxUserScreen as default};

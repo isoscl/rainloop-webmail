@@ -26,152 +26,6 @@ class Social
 	}
 
 	/**
-	 * @param array $oItem
-	 * @param array $aPics
-	 *
-	 * @return array|null
-	 */
-	private function convertGoogleJsonContactToResponseContact($oItem, &$aPics)
-	{
-		$mResult = null;
-		if (!empty($oItem['gd$email'][0]['address']))
-		{
-			$mEmail = \MailSo\Base\Utils::IdnToAscii($oItem['gd$email'][0]['address'], true);
-			if (\is_array($oItem['gd$email']) && 1 < \count($oItem['gd$email']))
-			{
-				$mEmail = array();
-				foreach ($oItem['gd$email'] as $oEmail)
-				{
-					if (!empty($oEmail['address']))
-					{
-						$mEmail[] = \MailSo\Base\Utils::IdnToAscii($oEmail['address'], true);
-					}
-				}
-			}
-
-			$sImg = '';
-			if (!empty($oItem['link']) && \is_array($oItem['link']))
-			{
-				foreach ($oItem['link'] as $oLink)
-				{
-					if ($oLink && isset($oLink['type'], $oLink['href'], $oLink['rel']) &&
-						'image/*' === $oLink['type'] && '#photo' === \substr($oLink['rel'], -6))
-					{
-						$sImg = $oLink['href'];
-						break;
-					}
-				}
-			}
-
-			$mResult = array(
-				'email' => $mEmail,
-				'name' => !empty($oItem['title']['$t']) ? $oItem['title']['$t'] : ''
-			);
-
-			if (0 < \strlen($sImg))
-			{
-				$sHash = \RainLoop\Utils::EncodeKeyValues(array(
-					'url' => $sImg,
-					'type' => 'google_access_token'
-				));
-
-				$mData = array();
-				if (isset($aPics[$sHash]))
-				{
-					$mData = $aPics[$sHash];
-					if (!\is_array($mData))
-					{
-						$mData = array($mData);
-					}
-				}
-
-				if (\is_array($mEmail))
-				{
-					$mData = \array_merge($mData, $mEmail);
-					$mData = \array_unique($mData);
-				}
-				else if (0 < \strlen($mEmail))
-				{
-					$mData[] = $mEmail;
-				}
-
-				if (\is_array($mData))
-				{
-					if (1 === \count($mData) && !empty($mData[0]))
-					{
-						$aPics[$sHash] = $mData[0];
-					}
-					else if (1 < \count($mData))
-					{
-						$aPics[$sHash] = $mData;
-					}
-				}
-			}
-		}
-
-		return $mResult;
-	}
-
-	/**
-	 * @return array
-	 */
-	public function GoogleUserContacts($oAccount)
-	{
-		$mResult = false;
-		$oGoogle = $this->GoogleConnector();
-		$aPics = array();
-
-		if ($oAccount && $oGoogle)
-		{
-			$sAccessToken = $this->GoogleAccessToken($oAccount, $oGoogle);
-			if (!empty($sAccessToken))
-			{
-				$oGoogle->setAccessToken($sAccessToken);
-
-				$aResponse = $oGoogle->fetch('https://www.google.com/m8/feeds/contacts/default/full', array(
-					'alt' => 'json'
-				));
-
-				if (!empty($aResponse['result']['feed']['entry']) && \is_array($aResponse['result']['feed']['entry']))
-				{
-					$mResult = array();
-					foreach ($aResponse['result']['feed']['entry'] as $oItem)
-					{
-						$aItem = $this->convertGoogleJsonContactToResponseContact($oItem, $aPics);
-						if ($aItem)
-						{
-							if (\is_array($aItem['email']))
-							{
-								$aNewItem = $aItem;
-								unset($aNewItem['email']);
-
-								foreach ($aItem['email'] as $sEmail)
-								{
-									$aNewItem['email'] = $sEmail;
-									$mResult[] = $aNewItem;
-								}
-							}
-							else
-							{
-								$mResult[] = $aItem;
-							}
-						}
-					}
-				}
-			}
-			else
-			{
-				$this->oActions->Logger()->Write('Empty Google Access Token', \MailSo\Log\Enumerations\Type::ERROR);
-			}
-		}
-
-		return false !== $mResult ? array(
-			'List' => $mResult,
-			'Pics' => $aPics
-		) : false;
-	}
-
-	/**
 	 * @return bool
 	 */
 	public function GoogleDisconnect($oAccount)
@@ -185,7 +39,7 @@ class Social
 			if (!empty($sEncodedeData))
 			{
 				$aData = \RainLoop\Utils::DecodeKeyValues($sEncodedeData);
-				if (\is_array($aData) && isset($aData['access_token'], $aData['id']))
+				if (\is_array($aData) && !empty($aData['id']))
 				{
 					$this->oActions->StorageProvider()->Clear(null,
 						\RainLoop\Providers\Storage\Enumerations\StorageType::NOBODY,
@@ -245,23 +99,23 @@ class Social
 		if ($oAccount && $oTwitter)
 		{
 			$oSettings = $this->oActions->SettingsProvider()->Load($oAccount);
-			$sEncodedeData = $oSettings->GetConf('TwitterAccessToken', '');
+			$sEncodedData = $oSettings->GetConf('TwitterAccessToken', '');
 
-			if (!empty($sEncodedeData))
+			if (!empty($sEncodedData))
 			{
-				$aData = \RainLoop\Utils::DecodeKeyValues($sEncodedeData);
-				if (is_array($aData) && isset($aData['user_id']))
+				$aData = \RainLoop\Utils::DecodeKeyValues($sEncodedData);
+				if (is_array($aData) && isset($aData['id']))
 				{
 					$this->oActions->StorageProvider()->Clear(null,
 						\RainLoop\Providers\Storage\Enumerations\StorageType::NOBODY,
-						$this->TwitterUserLoginStorageKey($oTwitter, $aData['user_id'])
+						$this->TwitterUserLoginStorageKey($oTwitter, $aData['id'])
 					);
 				}
 			}
 
 			$oSettings->SetConf('TwitterAccessToken', '');
 			$oSettings->SetConf('TwitterSocialName', '');
-			
+
 			return $this->oActions->SettingsProvider()->Save($oAccount, $oSettings);
 		}
 
@@ -271,10 +125,56 @@ class Social
 	/**
 	 * @return string
 	 */
-	public function GooglePopupService()
+	public function popupServiceResult($sTypeStr, $sLoginUrl, $bLogin, $iErrorCode)
 	{
 		$sResult = '';
+		$bAppCssDebug = !!$this->oActions->Config()->Get('labs', 'use_app_debug_css', false);
+
+		$sIcon = $sTypeStr;
+		if ('facebook' === $sIcon)
+		{
+			$sIcon = $sIcon.'-alt';
+		}
+
+		if ($sLoginUrl)
+		{
+			$this->oHttp->ServerNoCache();
+			@\header('Content-Type: text/html; charset=utf-8');
+
+			$sResult = \strtr(\file_get_contents(APP_VERSION_ROOT_PATH.'app/templates/Social.html'), array(
+				'{{RefreshMeta}}' => '<meta http-equiv="refresh" content="0; URL='.$sLoginUrl.'" />',
+				'{{Stylesheet}}' => $this->oActions->StaticPath('css/social'.($bAppCssDebug ? '' : '.min').'.css'),
+				'{{Icon}}' => $sIcon,
+				'{{Script}}' => ''
+			));
+		}
+		else
+		{
+			$this->oHttp->ServerNoCache();
+			@\header('Content-Type: text/html; charset=utf-8');
+
+			$sCallBackType = $bLogin ? '_login' : '';
+			$sConnectionFunc = 'rl_'.\md5(\RainLoop\Utils::GetConnectionToken()).'_'.$sTypeStr.$sCallBackType.'_service';
+
+			$sResult = \strtr(\file_get_contents(APP_VERSION_ROOT_PATH.'app/templates/Social.html'), array(
+				'{{RefreshMeta}}' => '',
+				'{{Stylesheet}}' => $this->oActions->StaticPath('css/social'.($bAppCssDebug ? '' : '.min').'.css'),
+				'{{Icon}}' => $sIcon,
+				'{{Script}}' => '<script data-cfasync="false">opener && opener.'.$sConnectionFunc.' && opener.'.
+					$sConnectionFunc.'('.$iErrorCode.'); self && self.close && self.close();</script>'
+			));
+		}
+
+		return $sResult;
+	}
+
+	/**
+	 * @return string
+	 */
+	public function GooglePopupService($bGmail = false)
+	{
 		$sLoginUrl = '';
+		$oAccount = null;
 
 		$bLogin = false;
 		$iErrorCode = \RainLoop\Notifications::UnknownError;
@@ -297,22 +197,35 @@ class Social
 				$sState = $this->oHttp->GetQuery('state');
 				if (!empty($sState))
 				{
-					$aParts = explode('|', $sState, 2);
-					$sCheckToken = !empty($aParts[0]) ? $aParts[0] : '';
-					$sCheckAuth = !empty($aParts[1]) ? $aParts[1] : '';
+					$aParts = explode('|', $sState, 3);
+
+					if (!$bGmail)
+					{
+						$bGmail = !empty($aParts[0]) ? '1' === (string) $aParts[0] : false;
+					}
+
+					$sCheckToken = !empty($aParts[1]) ? $aParts[1] : '';
+					$sCheckAuth = !empty($aParts[2]) ? $aParts[2] : '';
 				}
 
 				$sRedirectUrl = $this->oHttp->GetFullUrl().'?SocialGoogle';
 				if (!$this->oHttp->HasQuery('code'))
 				{
-//					https://www.google.com/m8/feeds/
 					$aParams = array(
-						'scope' => 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
-						'state' => \RainLoop\Utils::GetConnectionToken().'|'.$this->oActions->GetSpecAuthToken(),
-//						'access_type' => 'offline',
-//						'approval_prompt' => 'force',
+						'scope' => \trim(\implode(' ', array(
+							'https://www.googleapis.com/auth/userinfo.email',
+							'https://www.googleapis.com/auth/userinfo.profile',
+							$bGmail ? 'https://mail.google.com/' : ''
+						))),
+						'state' => ($bGmail ? '1' : '0').'|'.\RainLoop\Utils::GetConnectionToken().'|'.$this->oActions->GetSpecAuthToken(),
 						'response_type' => 'code'
 					);
+
+//					if ($bGmail)
+//					{
+//						$aParams['access_type'] = 'offline';
+//						$aParams['approval_prompt'] = 'force';
+//					}
 
 					$sLoginUrl = $oGoogle->getAuthenticationUrl('https://accounts.google.com/o/oauth2/auth', $sRedirectUrl, $aParams);
 				}
@@ -331,29 +244,37 @@ class Social
 					if (!empty($aAuthorizationResponse['result']['access_token']))
 					{
 						$oGoogle->setAccessToken($aAuthorizationResponse['result']['access_token']);
-						$aUserinfoResponse = $oGoogle->fetch('https://www.googleapis.com/oauth2/v2/userinfo');
+						$aUserInfoResponse = $oGoogle->fetch('https://www.googleapis.com/oauth2/v2/userinfo');
 
-						if (!empty($aUserinfoResponse['result']['id']))
+						if (!empty($aUserInfoResponse['result']['id']))
 						{
 							if ($bLogin)
 							{
-								$sUserData = $this->oActions->StorageProvider()->Get(null,
-									\RainLoop\Providers\Storage\Enumerations\StorageType::NOBODY,
-									$this->GoogleUserLoginStorageKey($oGoogle, $aUserinfoResponse['result']['id'])
-								);
+								$aUserData = null;
+								if ($bGmail)
+								{
+									if (!empty($aUserInfoResponse['result']['email']))
+									{
+										$aUserData = array(
+											'Email' => $aUserInfoResponse['result']['email'],
+											'Password' => APP_GOOGLE_ACCESS_TOKEN_PREFIX.$aAuthorizationResponse['result']['access_token']
+										);
+									}
+								}
+								else
+								{
+									$sUserData = $this->oActions->StorageProvider()->Get(null,
+										\RainLoop\Providers\Storage\Enumerations\StorageType::NOBODY,
+										$this->GoogleUserLoginStorageKey($oGoogle, $aUserInfoResponse['result']['id'])
+									);
 
-								$aUserData = \RainLoop\Utils::DecodeKeyValues($sUserData);
+									$aUserData = \RainLoop\Utils::DecodeKeyValues($sUserData);
+								}
 
 								if ($aUserData && \is_array($aUserData) &&
 									!empty($aUserData['Email']) && isset($aUserData['Password']))
 								{
-									$oAccount = $this->oActions->LoginProcess($aUserData['Email'], $aUserData['Password']);
-									if ($oAccount instanceof \RainLoop\Model\Account)
-									{
-										$this->oActions->AuthToken($oAccount);
-
-										$iErrorCode = 0;
-									}
+									$iErrorCode = $this->loginProcess($oAccount, $aUserData['Email'], $aUserData['Password']);
 								}
 								else
 								{
@@ -361,24 +282,31 @@ class Social
 								}
 							}
 
-							if ($oAccount)
+							if ($oAccount && !$bGmail)
 							{
 								$aUserData = array(
+									'ID' => $aUserInfoResponse['result']['id'],
 									'Email' => $oAccount->Email(),
 									'Password' => $oAccount->Password()
 								);
 
-								$sSocialName = !empty($aUserinfoResponse['result']['name']) ? $aUserinfoResponse['result']['name'] : '';
-								$sSocialName .= !empty($aUserinfoResponse['result']['email']) ? ' ('.$aUserinfoResponse['result']['email'].')' : '';
+								$sSocialName = !empty($aUserInfoResponse['result']['name']) ? $aUserInfoResponse['result']['name'] : '';
+								$sSocialName .= !empty($aUserInfoResponse['result']['email']) ? ' ('.$aUserInfoResponse['result']['email'].')' : '';
 								$sSocialName = \trim($sSocialName);
 
 								$oSettings = $this->oActions->SettingsProvider()->Load($oAccount);
+
+								$oSettings->SetConf('GoogleAccessToken', \RainLoop\Utils::EncodeKeyValues(array(
+									'id' => $aUserInfoResponse['result']['id']
+								)));
+
 								$oSettings->SetConf('GoogleSocialName', $sSocialName);
+
 								$this->oActions->SettingsProvider()->Save($oAccount, $oSettings);
 
 								$this->oActions->StorageProvider()->Put(null,
 									\RainLoop\Providers\Storage\Enumerations\StorageType::NOBODY,
-									$this->GoogleUserLoginStorageKey($oGoogle, $aUserinfoResponse['result']['id']),
+									$this->GoogleUserLoginStorageKey($oGoogle, $aUserInfoResponse['result']['id']),
 									\RainLoop\Utils::EncodeKeyValues($aUserData));
 
 								$iErrorCode = 0;
@@ -393,20 +321,7 @@ class Social
 			$this->oActions->Logger()->WriteException($oException, \MailSo\Log\Enumerations\Type::ERROR);
 		}
 
-		if ($sLoginUrl)
-		{
-			$this->oActions->Location($sLoginUrl);
-		}
-		else
-		{
-			@\header('Content-Type: text/html; charset=utf-8');
-			$sCallBackType = $bLogin ? '_login' : '';
-			$sConnectionFunc = 'rl_'.\md5(\RainLoop\Utils::GetConnectionToken()).'_google'.$sCallBackType.'_service';
-			$sResult = '<script data-cfasync="false">opener && opener.'.$sConnectionFunc.' && opener.'.
-				$sConnectionFunc.'('.$iErrorCode.'); self && self.close && self.close();</script>';
-		}
-
-		return $sResult;
+		return $this->popupServiceResult('google', $sLoginUrl, $bLogin, $iErrorCode);
 	}
 
 	/**
@@ -414,13 +329,13 @@ class Social
 	 */
 	public function FacebookPopupService()
 	{
-		$sResult = '';
 		$sLoginUrl = '';
 		$sSocialName = '';
 
 		$mData = false;
 		$sUserData = '';
 		$aUserData = false;
+		$oAccount = null;
 
 		$bLogin = false;
 		$iErrorCode = \RainLoop\Notifications::UnknownError;
@@ -432,30 +347,33 @@ class Social
 
 		$oAccount = $this->oActions->GetAccount();
 
-		$oFacebook = $this->FacebookConnector($oAccount);
+		$sRedirectUrl = '';
+		$oFacebook = $this->FacebookConnector($oAccount, $sRedirectUrl);
 		if ($oFacebook)
 		{
 			try
 			{
-				$oSession = $oFacebook->getSessionFromRedirect();
-				if (!$oSession && !$this->oHttp->HasQuery('state'))
-				{
-					$sLoginUrl = $oFacebook->getLoginUrl().'&display=popup';
-				}
-				else if ($oSession)
-				{
-					$oRequest = new \Facebook\FacebookRequest($oSession, 'GET', '/me');
-					$oResponse = $oRequest->execute();
-					$oGraphObject = $oResponse->getGraphObject();
+				$oRedirectLoginHelper = $oFacebook->getRedirectLoginHelper();
+				$oAccessToken = $oRedirectLoginHelper->getAccessToken();
 
-					$mData = $oGraphObject->getProperty('id');
-					$sSocialName = $oGraphObject->getProperty('name');
+				if (!$oAccessToken && !$this->oHttp->HasQuery('state'))
+				{
+					$sLoginUrl = $oFacebook->getRedirectLoginHelper()->getLoginUrl($sRedirectUrl.'&display=popup');
+				}
+				else if ($oAccessToken)
+				{
+					$oResponse = $oFacebook->get('/me?fields=id,name', (string) $oAccessToken);
+					$oGraphUser = $oResponse->getGraphUser();
+
+					$mData = $oGraphUser->getId();
+					$sSocialName = $oGraphUser->getName();
 
 					if ($oAccount)
 					{
 						if ($mData && 0 < \strlen($mData))
 						{
 							$aUserData = array(
+								'id' => $mData,
 								'Email' => $oAccount->Email(),
 								'Password' => $oAccount->Password()
 							);
@@ -463,7 +381,6 @@ class Social
 							$oSettings = $this->oActions->SettingsProvider()->Load($oAccount);
 							$oSettings->SetConf('FacebookSocialName', $sSocialName);
 							$oSettings->SetConf('FacebookAccessToken', \RainLoop\Utils::EncodeKeyValues(array('id' => $mData)));
-
 
 							$this->oActions->SettingsProvider()->Save($oAccount, $oSettings);
 
@@ -494,13 +411,7 @@ class Social
 						if ($aUserData && \is_array($aUserData) &&
 							!empty($aUserData['Email']) && isset($aUserData['Password']))
 						{
-							$oAccount = $this->oActions->LoginProcess($aUserData['Email'], $aUserData['Password']);
-							if ($oAccount instanceof \RainLoop\Model\Account)
-							{
-								$this->oActions->AuthToken($oAccount);
-
-								$iErrorCode = 0;
-							}
+							$iErrorCode = $this->loginProcess($oAccount, $aUserData['Email'], $aUserData['Password']);
 						}
 						else
 						{
@@ -515,23 +426,7 @@ class Social
 			}
 		}
 
-		if ($sLoginUrl)
-		{
-			$this->oActions->Location($sLoginUrl);
-		}
-		else
-		{
-			$this->oHttp->ServerNoCache();
-
-			@\header('Content-Type: text/html; charset=utf-8');
-
-			$sCallBackType = $bLogin ? '_login' : '';
-			$sConnectionFunc = 'rl_'.\md5(\RainLoop\Utils::GetConnectionToken()).'_facebook'.$sCallBackType.'_service';
-			$sResult = '<script data-cfasync="false">opener && opener.'.$sConnectionFunc.' && opener.'.
-				$sConnectionFunc.'('.$iErrorCode.'); self && self.close && self.close();</script>';
-		}
-
-		return $sResult;
+		return $this->popupServiceResult('facebook', $sLoginUrl, $bLogin, $iErrorCode);
 	}
 
 	/**
@@ -539,10 +434,10 @@ class Social
 	 */
 	public function TwitterPopupService()
 	{
-		$sResult = '';
 		$sLoginUrl = '';
 
 		$sSocialName = '';
+		$oAccount = null;
 
 		$bLogin = false;
 		$iErrorCode = \RainLoop\Notifications::UnknownError;
@@ -586,11 +481,11 @@ class Social
 
 							if (200 === $iCode && isset($oTwitter->response['response']))
 							{
-								$this->oActions->Logger()->WriteDump($oTwitter->response['response']);
 								$aAccessToken = $oTwitter->extract_params($oTwitter->response['response']);
-								$this->oActions->Logger()->WriteDump($aAccessToken);
 								if ($aAccessToken && isset($aAccessToken['oauth_token']) && !empty($aAccessToken['user_id']))
 								{
+									$aAccessToken['id'] = $aAccessToken['user_id'];
+
 									$oTwitter->config['user_token'] = $aAccessToken['oauth_token'];
 									$oTwitter->config['user_secret'] = $aAccessToken['oauth_token_secret'];
 
@@ -598,6 +493,7 @@ class Social
 									$sSocialName = \trim($sSocialName);
 
 									$aUserData = array(
+										'id' => $aAccessToken['id'],
 										'Email' => $oAccount->Email(),
 										'Password' => $oAccount->Password()
 									);
@@ -609,7 +505,7 @@ class Social
 
 									$this->oActions->StorageProvider()->Put(null,
 										\RainLoop\Providers\Storage\Enumerations\StorageType::NOBODY,
-										$this->TwitterUserLoginStorageKey($oTwitter, $aAccessToken['user_id']),
+										$this->TwitterUserLoginStorageKey($oTwitter, $aAccessToken['id']),
 										\RainLoop\Utils::EncodeKeyValues($aUserData));
 
 									$iErrorCode = 0;
@@ -667,16 +563,9 @@ class Social
 									$aUserData = \RainLoop\Utils::DecodeKeyValues($sUserData);
 
 									if ($aUserData && \is_array($aUserData) &&
-										!empty($aUserData['Email']) &&
-										isset($aUserData['Password']))
+										!empty($aUserData['Email']) && isset($aUserData['Password']))
 									{
-										$oAccount = $this->oActions->LoginProcess($aUserData['Email'], $aUserData['Password']);
-										if ($oAccount instanceof \RainLoop\Model\Account)
-										{
-											$this->oActions->AuthToken($oAccount);
-
-											$iErrorCode = 0;
-										}
+										$iErrorCode = $this->loginProcess($oAccount, $aUserData['Email'], $aUserData['Password']);
 									}
 									else
 									{
@@ -714,20 +603,7 @@ class Social
 			$this->oActions->Logger()->WriteException($oException, \MailSo\Log\Enumerations\Type::ERROR);
 		}
 
-		if ($sLoginUrl)
-		{
-			$this->oActions->Location($sLoginUrl);
-		}
-		else
-		{
-			@\header('Content-Type: text/html; charset=utf-8');
-			$sCallBackType = $bLogin ? '_login' : '';
-			$sConnectionFunc = 'rl_'.\md5(\RainLoop\Utils::GetConnectionToken()).'_twitter'.$sCallBackType.'_service';
-			$sResult = '<script data-cfasync="false">opener && opener.'.$sConnectionFunc.' && opener.'.
-				$sConnectionFunc.'('.$iErrorCode.'); self && self.close && self.close();</script>';
-		}
-
-		return $sResult;
+		return $this->popupServiceResult('twitter', $sLoginUrl, $bLogin, $iErrorCode);
 	}
 
 	/**
@@ -803,24 +679,23 @@ class Social
 
 	/**
 	 * @param \RainLoop\Model\Account|null $oAccount = null
+	 * @param string $sRedirectUrl = ''
 	 *
 	 * @return \RainLoop\Common\RainLoopFacebookRedirectLoginHelper|null
 	 */
-	public function FacebookConnector($oAccount = null)
+	public function FacebookConnector($oAccount = null, &$sRedirectUrl = '')
 	{
 		$oFacebook = false;
 		$oConfig = $this->oActions->Config();
 		$sAppID = \trim($oConfig->Get('social', 'fb_app_id', ''));
+		$sAppSecret = \trim($oConfig->Get('social', 'fb_app_secret', ''));
 
 		if (\version_compare(PHP_VERSION, '5.4.0', '>=') &&
 			$oConfig->Get('social', 'fb_enable', false) && '' !== $sAppID &&
 			'' !== \trim($oConfig->Get('social', 'fb_app_secret', '')) &&
-			\class_exists('Facebook\FacebookSession')
+			\class_exists('Facebook\Facebook')
 		)
 		{
-			\Facebook\FacebookSession::setDefaultApplication($sAppID,
-				\trim($oConfig->Get('social', 'fb_app_secret', '')));
-
 			$sRedirectUrl = $this->oHttp->GetFullUrl().'?SocialFacebook';
 			if (0 < \strlen($this->oActions->GetSpecAuthToken()))
 			{
@@ -836,12 +711,12 @@ class Social
 			{
 				$oAccount = $this->oActions->GetAccount();
 
-				$oFacebook = new \RainLoop\Common\RainLoopFacebookRedirectLoginHelper($sRedirectUrl);
-				$oFacebook->initRainLoopData(array(
-					'rlAppId' => $sAppID,
-					'rlAccount' => $oAccount,
-					'rlUserHash' => \RainLoop\Utils::GetConnectionToken(),
-					'rlStorageProvaider' => $this->oActions->StorageProvider()
+				$oFacebook = new \Facebook\Facebook(array(
+					'app_id' => $sAppID, // Replace {app-id} with your app id
+					'app_secret' => $sAppSecret,
+					'persistent_data_handler' => new \RainLoop\Common\FacebookRainLoopPersistentDataHandler(
+						$oAccount, \RainLoop\Utils::GetConnectionToken(), $this->oActions->StorageProvider()
+					)
 				));
 			}
 			catch (\Exception $oException)
@@ -866,7 +741,7 @@ class Social
 	 */
 	public function FacebookUserLoginStorageKey($oFacebook, $sFacebookUserId)
 	{
-		return \implode('_', array('facebookNew', \md5($oFacebook->GetRLAppId()), $sFacebookUserId, APP_SALT));
+		return \implode('_', array('facebookNew', \md5($oFacebook->getApp()->getId()), $sFacebookUserId, APP_SALT));
 	}
 
 	/**
@@ -874,6 +749,44 @@ class Social
 	 */
 	public function TwitterUserLoginStorageKey($oTwitter, $sTwitterUserId)
 	{
-		return \implode('_', array('twitter', \md5($oTwitter->config['consumer_secret']), $sTwitterUserId, APP_SALT));
+		return \implode('_', array('twitter_2', \md5($oTwitter->config['consumer_secret']), $sTwitterUserId, APP_SALT));
+	}
+
+	/**
+	 * @param \RainLoop\Model\Account|null $oAccount
+	 * @param string $sEmail
+	 * @param string $sPassword
+	 *
+	 * @return int
+	 */
+	private function loginProcess(&$oAccount, $sEmail, $sPassword)
+	{
+		$iErrorCode = \RainLoop\Notifications::UnknownError;
+
+		try
+		{
+			$oAccount = $this->oActions->LoginProcess($sEmail, $sPassword, '', '', false, true);
+			if ($oAccount instanceof \RainLoop\Model\Account)
+			{
+				$this->oActions->AuthToken($oAccount);
+				$iErrorCode = 0;
+			}
+			else
+			{
+				$oAccount = null;
+				$iErrorCode = \RainLoop\Notifications::AuthError;
+			}
+		}
+		catch (\RainLoop\Exceptions\ClientException $oException)
+		{
+			$iErrorCode = $oException->getCode();
+		}
+		catch (\Exception $oException)
+		{
+			unset($oException);
+			$iErrorCode = \RainLoop\Notifications::UnknownError;
+		}
+
+		return $iErrorCode;
 	}
 }

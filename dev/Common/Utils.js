@@ -1,1697 +1,1643 @@
 
-(function () {
+import window from 'window';
+import $ from '$';
+import _ from '_';
+import ko from 'ko';
+import Autolinker from 'Autolinker';
 
-	'use strict';
+import {$win, $div, $hcont, dropdownVisibility, data as GlobalsData} from 'Common/Globals';
+import {ComposeType, EventKeyCode, SaveSettingsStep, FolderType} from 'Common/Enums';
+import {Mime} from 'Common/Mime';
+import {jassl} from 'Common/Jassl';
 
-	var
-		oEncryptObject = null,
+const trim = $.trim;
+const inArray = $.inArray;
+const isArray = _.isArray;
+const isObject = _.isObject;
+const isFunc = _.isFunction;
+const isUnd = _.isUndefined;
+const isNull = _.isNull;
+const has = _.has;
+const bind = _.bind;
+const noop = () => {}; // eslint-disable-line no-empty-function
+const noopTrue = () => true;
+const noopFalse = () => false;
 
-		Utils = {},
+export {trim, inArray, isArray, isObject, isFunc, isUnd, isNull, has, bind, noop, noopTrue, noopFalse, jassl};
 
-		window = require('window'),
-		_ = require('_'),
-		$ = require('$'),
-		ko = require('ko'),
-		Autolinker = require('Autolinker'),
-		JSEncrypt = require('JSEncrypt'),
+/**
+ * @param {Function} func
+ */
+export function silentTryCatch(func)
+{
+	try {
+		func();
+	}
+	catch (e) {} // eslint-disable-line no-empty
+}
 
-		Mime = require('Common/Mime'),
+/**
+ * @param {*} value
+ * @returns {boolean}
+ */
+export function isNormal(value)
+{
+	return !isUnd(value) && !isNull(value);
+}
 
-		Enums = require('Common/Enums'),
-		Globals = require('Common/Globals')
-	;
+/**
+ * @param {(string|number)} value
+ * @param {boolean=} includeZero = true
+ * @returns {boolean}
+ */
+export function isPosNumeric(value, includeZero = true)
+{
+	return !isNormal(value) ? false :
+		(includeZero ? (/^[0-9]*$/).test(value.toString()) : (/^[1-9]+[0-9]*$/).test(value.toString()));
+}
 
-	Utils.trim = $.trim;
-	Utils.inArray = $.inArray;
-	Utils.isArray = _.isArray;
-	Utils.isObject = _.isObject;
-	Utils.isFunc = _.isFunction;
-	Utils.isUnd = _.isUndefined;
-	Utils.isNull = _.isNull;
-	Utils.emptyFunction = function () {};
+/**
+ * @param {*} value
+ * @param {number=} defaultValur = 0
+ * @returns {number}
+ */
+export function pInt(value, defaultValur = 0)
+{
+	const result = isNormal(value) && '' !== value ? window.parseInt(value, 10) : defaultValur;
+	return window.isNaN(result) ? defaultValur : result;
+}
 
-	/**
-	 * @param {*} oValue
-	 * @return {boolean}
-	 */
-	Utils.isNormal = function (oValue)
+/**
+ * @param {*} value
+ * @returns {string}
+ */
+export function pString(value)
+{
+	return isNormal(value) ? '' + value : '';
+}
+
+/**
+ * @param {*} value
+ * @returns {boolean}
+ */
+export function pBool(value)
+{
+	return !!value;
+}
+
+/**
+ * @param {*} value
+ * @returns {string}
+ */
+export function boolToAjax(value)
+{
+	return value ? '1' : '0';
+}
+
+/**
+ * @param {*} values
+ * @returns {boolean}
+ */
+export function isNonEmptyArray(values)
+{
+	return isArray(values) && 0 < values.length;
+}
+
+/**
+ * @param {string} component
+ * @returns {string}
+ */
+export function encodeURIComponent(component)
+{
+	return window.encodeURIComponent(component);
+}
+
+/**
+ * @param {string} component
+ * @returns {string}
+ */
+export function decodeURIComponent(component)
+{
+	return window.decodeURIComponent(component);
+}
+
+/**
+ * @param {string} url
+ * @returns {string}
+ */
+export function decodeURI(url)
+{
+	return window.decodeURI(url);
+}
+
+/**
+ * @param {string} url
+ * @returns {string}
+ */
+export function encodeURI(url)
+{
+	return window.encodeURI(url);
+}
+
+/**
+ * @param {string} queryString
+ * @returns {Object}
+ */
+export function simpleQueryParser(queryString)
+{
+	let
+		index = 0,
+		len = 0,
+		temp = null;
+
+	const
+		queries = queryString.split('&'),
+		params = {};
+
+	for (len = queries.length; index < len; index++)
 	{
-		return !Utils.isUnd(oValue) && !Utils.isNull(oValue);
-	};
+		temp = queries[index].split('=');
+		params[decodeURIComponent(temp[0])] = decodeURIComponent(temp[1]);
+	}
 
-	Utils.windowResize = _.debounce(function (iTimeout) {
-		if (Utils.isUnd(iTimeout))
+	return params;
+}
+
+/**
+ * @param {number=} len = 32
+ * @returns {string}
+ */
+export function fakeMd5(len = 32)
+{
+	const
+		line = '0123456789abcdefghijklmnopqrstuvwxyz',
+		lineLen = line.length;
+
+	len = pInt(len);
+
+	let result = '';
+	while (result.length < len)
+	{
+		result += line.substr(window.Math.round(window.Math.random() * lineLen), 1);
+	}
+
+	return result;
+}
+
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+export function encodeHtml(text)
+{
+	return isNormal(text) ? _.escape(text.toString()) : '';
+}
+
+/**
+ * @param {string} text
+ * @param {number=} len = 100
+ * @returns {string}
+ */
+export function splitPlainText(text, len = 100)
+{
+	let
+		prefix = '',
+		subText = '',
+		result = text,
+		spacePos = 0,
+		newLinePos = 0;
+
+	while (result.length > len)
+	{
+		subText = result.substring(0, len);
+		spacePos = subText.lastIndexOf(' ');
+		newLinePos = subText.lastIndexOf('\n');
+
+		if (-1 !== newLinePos)
 		{
-			Globals.$win.resize();
-		}
-		else
-		{
-			window.setTimeout(function () {
-				Globals.$win.resize();
-			}, iTimeout);
-		}
-	}, 50);
-
-	Utils.windowResizeCallback = function () {
-		Utils.windowResize();
-	};
-
-	/**
-	 * @param {(string|number)} mValue
-	 * @param {boolean=} bIncludeZero
-	 * @return {boolean}
-	 */
-	Utils.isPosNumeric = function (mValue, bIncludeZero)
-	{
-		return Utils.isNormal(mValue) ?
-			((Utils.isUnd(bIncludeZero) ? true : !!bIncludeZero) ?
-				(/^[0-9]*$/).test(mValue.toString()) :
-				(/^[1-9]+[0-9]*$/).test(mValue.toString())) :
-			false;
-	};
-
-	/**
-	 * @param {*} iValue
-	 * @param {number=} iDefault = 0
-	 * @return {number}
-	 */
-	Utils.pInt = function (iValue, iDefault)
-	{
-		var iResult = Utils.isNormal(iValue) && '' !== iValue ? window.parseInt(iValue, 10) : (iDefault || 0);
-		return window.isNaN(iResult) ? (iDefault || 0) : iResult;
-	};
-
-	/**
-	 * @param {*} mValue
-	 * @return {string}
-	 */
-	Utils.pString = function (mValue)
-	{
-		return Utils.isNormal(mValue) ? '' + mValue : '';
-	};
-
-	/**
-	 * @param {string} sComponent
-	 * @return {string}
-	 */
-	Utils.encodeURIComponent = function (sComponent)
-	{
-		return window.encodeURIComponent(sComponent);
-	};
-
-	/**
-	 * @param {*} aValue
-	 * @return {boolean}
-	 */
-	Utils.isNonEmptyArray = function (aValue)
-	{
-		return Utils.isArray(aValue) && 0 < aValue.length;
-	};
-
-	/**
-	 * @param {string} sQueryString
-	 * @return {Object}
-	 */
-	Utils.simpleQueryParser = function (sQueryString)
-	{
-		var
-			oParams = {},
-			aQueries = [],
-			aTemp = [],
-			iIndex = 0,
-			iLen = 0
-		;
-
-		aQueries = sQueryString.split('&');
-		for (iIndex = 0, iLen = aQueries.length; iIndex < iLen; iIndex++)
-		{
-			aTemp = aQueries[iIndex].split('=');
-			oParams[window.decodeURIComponent(aTemp[0])] = window.decodeURIComponent(aTemp[1]);
-		}
-
-		return oParams;
-	};
-
-	/**
-	 * @param {string} sMailToUrl
-	 * @param {Function} PopupComposeVoreModel
-	 * @returns {boolean}
-	 */
-	Utils.mailToHelper = function (sMailToUrl, PopupComposeVoreModel)
-	{
-		if (sMailToUrl && 'mailto:' === sMailToUrl.toString().substr(0, 7).toLowerCase())
-		{
-			sMailToUrl = sMailToUrl.toString().substr(7);
-
-			var
-				aTo = [],
-				aCc = null,
-				aBcc = null,
-				oParams = {},
-				EmailModel = require('Model/Email'),
-				sEmail = sMailToUrl.replace(/\?.+$/, ''),
-				sQueryString = sMailToUrl.replace(/^[^\?]*\?/, ''),
-				fParseEmailLine = function (sLine) {
-					return sLine ? _.compact(_.map(window.decodeURIComponent(sLine).split(/[,]/), function (sItem) {
-						var oEmailModel = new EmailModel();
-						oEmailModel.mailsoParse(sItem);
-						return '' !== oEmailModel.email ? oEmailModel : null;
-					})) : null;
-				}
-			;
-
-			aTo = fParseEmailLine(sEmail);
-
-			oParams = Utils.simpleQueryParser(sQueryString);
-
-			if (!Utils.isUnd(oParams.cc))
-			{
-				aCc = fParseEmailLine(window.decodeURIComponent(oParams.cc));
-			}
-
-			if (!Utils.isUnd(oParams.bcc))
-			{
-				aBcc = fParseEmailLine(window.decodeURIComponent(oParams.bcc));
-			}
-
-			require('Knoin/Knoin').showScreenPopup(PopupComposeVoreModel, [Enums.ComposeType.Empty, null,
-				aTo, aCc, aBcc,
-				Utils.isUnd(oParams.subject) ? null :
-					Utils.pString(window.decodeURIComponent(oParams.subject)),
-				Utils.isUnd(oParams.body) ? null :
-					Utils.plainToHtml(Utils.pString(window.decodeURIComponent(oParams.body)))
-			]);
-
-			return true;
-		}
-
-		return false;
-	};
-
-	/**
-	 * @param {string} sPublicKey
-	 * @return {JSEncrypt}
-	 */
-	Utils.rsaObject = function (sPublicKey)
-	{
-		if (JSEncrypt && sPublicKey && (null === oEncryptObject || (oEncryptObject && oEncryptObject.__sPublicKey !== sPublicKey)) &&
-			window.crypto && window.crypto.getRandomValues)
-		{
-			oEncryptObject = new JSEncrypt();
-			oEncryptObject.setPublicKey(sPublicKey);
-			oEncryptObject.__sPublicKey = sPublicKey;
-		}
-		else
-		{
-			oEncryptObject = false;
-		}
-
-		return oEncryptObject;
-	};
-
-	/**
-	 * @param {string} sValue
-	 * @param {string} sPublicKey
-	 * @return {string}
-	 */
-	Utils.rsaEncode = function (sValue, sPublicKey)
-	{
-		if (window.crypto && window.crypto.getRandomValues && sPublicKey)
-		{
-			var
-				sResultValue = false,
-				oEncrypt = Utils.rsaObject(sPublicKey)
-			;
-
-			if (oEncrypt)
-			{
-				sResultValue = oEncrypt.encrypt(Utils.fakeMd5() + ':' + sValue + ':' + Utils.fakeMd5());
-				if (false !== sResultValue && Utils.isNormal(sResultValue))
-				{
-					return 'rsa:xxx:' + sResultValue;
-				}
-			}
+			spacePos = newLinePos;
 		}
 
-		return sValue;
-	};
-
-	Utils.rsaEncode.supported = !!(window.crypto && window.crypto.getRandomValues && false && JSEncrypt);
-
-	/**
-	 * @param {string} sText
-	 * @return {string}
-	 */
-	Utils.encodeHtml = function (sText)
-	{
-		return Utils.isNormal(sText) ? sText.toString()
-			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;').replace(/'/g, '&#039;') : '';
-	};
-
-	/**
-	 * @param {string} sText
-	 * @param {number=} iLen
-	 * @return {string}
-	 */
-	Utils.splitPlainText = function (sText, iLen)
-	{
-		var
-			sPrefix = '',
-			sSubText = '',
-			sResult = sText,
-			iSpacePos = 0,
-			iNewLinePos = 0
-		;
-
-		iLen = Utils.isUnd(iLen) ? 100 : iLen;
-
-		while (sResult.length > iLen)
+		if (-1 === spacePos)
 		{
-			sSubText = sResult.substring(0, iLen);
-			iSpacePos = sSubText.lastIndexOf(' ');
-			iNewLinePos = sSubText.lastIndexOf('\n');
-
-			if (-1 !== iNewLinePos)
-			{
-				iSpacePos = iNewLinePos;
-			}
-
-			if (-1 === iSpacePos)
-			{
-				iSpacePos = iLen;
-			}
-
-			sPrefix += sSubText.substring(0, iSpacePos) + '\n';
-			sResult = sResult.substring(iSpacePos + 1);
+			spacePos = len;
 		}
 
-		return sPrefix + sResult;
+		prefix += subText.substring(0, spacePos) + '\n';
+		result = result.substring(spacePos + 1);
+	}
+
+	return prefix + result;
+}
+
+const timeOutAction = (function() {
+	const timeOuts = {};
+	return (action, fFunction, timeOut) => {
+		timeOuts[action] = isUnd(timeOuts[action]) ? 0 : timeOuts[action];
+		window.clearTimeout(timeOuts[action]);
+		timeOuts[action] = window.setTimeout(fFunction, timeOut);
 	};
+}());
 
-	Utils.timeOutAction = (function () {
-
-		var
-			oTimeOuts = {}
-		;
-
-		return function (sAction, fFunction, iTimeOut)
+const timeOutActionSecond = (function() {
+	const timeOuts = {};
+	return (action, fFunction, timeOut) => {
+		if (!timeOuts[action])
 		{
-			if (Utils.isUnd(oTimeOuts[sAction]))
-			{
-				oTimeOuts[sAction] = 0;
-			}
-
-			window.clearTimeout(oTimeOuts[sAction]);
-			oTimeOuts[sAction] = window.setTimeout(fFunction, iTimeOut);
-		};
-	}());
-
-	Utils.timeOutActionSecond = (function () {
-
-		var
-			oTimeOuts = {}
-		;
-
-		return function (sAction, fFunction, iTimeOut)
-		{
-			if (!oTimeOuts[sAction])
-			{
-				oTimeOuts[sAction] = window.setTimeout(function () {
-					fFunction();
-					oTimeOuts[sAction] = 0;
-				}, iTimeOut);
-			}
-		};
-	}());
-
-	Utils.audio = (function () {
-
-		var
-			oAudio = false
-		;
-
-		return function (sMp3File, sOggFile) {
-
-			if (false === oAudio)
-			{
-				if (Globals.bIsiOSDevice)
-				{
-					oAudio = null;
-				}
-				else
-				{
-					var
-						bCanPlayMp3	= false,
-						bCanPlayOgg	= false,
-						oAudioLocal = window.Audio ? new window.Audio() : null
-					;
-
-					if (oAudioLocal && oAudioLocal.canPlayType && oAudioLocal.play)
-					{
-						bCanPlayMp3 = '' !== oAudioLocal.canPlayType('audio/mpeg; codecs="mp3"');
-						if (!bCanPlayMp3)
-						{
-							bCanPlayOgg = '' !== oAudioLocal.canPlayType('audio/ogg; codecs="vorbis"');
-						}
-
-						if (bCanPlayMp3 || bCanPlayOgg)
-						{
-							oAudio = oAudioLocal;
-							oAudio.preload = 'none';
-							oAudio.loop = false;
-							oAudio.autoplay = false;
-							oAudio.muted = false;
-							oAudio.src = bCanPlayMp3 ? sMp3File : sOggFile;
-						}
-						else
-						{
-							oAudio = null;
-						}
-					}
-					else
-					{
-						oAudio = null;
-					}
-				}
-			}
-
-			return oAudio;
-		};
-	}());
-
-	/**
-	 * @param {(Object|null|undefined)} oObject
-	 * @param {string} sProp
-	 * @return {boolean}
-	 */
-	Utils.hos = function (oObject, sProp)
-	{
-		return oObject && window.Object && window.Object.hasOwnProperty ? window.Object.hasOwnProperty.call(oObject, sProp) : false;
+			timeOuts[action] = window.setTimeout(() => {
+				fFunction();
+				timeOuts[action] = 0;
+			}, timeOut);
+		}
 	};
+}());
 
-	/**
-	 * @return {boolean}
-	 */
-	Utils.inFocus = function ()
-	{
+export {timeOutAction, timeOutActionSecond};
+
+/**
+ * @returns {boolean}
+ */
+export function inFocus()
+{
+	try {
 		if (window.document.activeElement)
 		{
-			if (Utils.isUnd(window.document.activeElement.__inFocusCache))
+			if (isUnd(window.document.activeElement.__inFocusCache))
 			{
 				window.document.activeElement.__inFocusCache = $(window.document.activeElement).is('input,textarea,iframe,.cke_editable');
 			}
 
 			return !!window.document.activeElement.__inFocusCache;
 		}
+	}
+	catch (e) {} // eslint-disable-line no-empty
 
-		return false;
-	};
+	return false;
+}
 
-	Utils.removeInFocus = function ()
+/**
+ * @param {boolean} force
+ * @returns {void}
+ */
+export function removeInFocus(force)
+{
+	if (window.document && window.document.activeElement && window.document.activeElement.blur)
 	{
-		if (window.document && window.document.activeElement && window.document.activeElement.blur)
-		{
-			var oA = $(window.document.activeElement);
-			if (oA.is('input,textarea'))
+		try {
+			const activeEl = $(window.document.activeElement);
+			if (activeEl && activeEl.is('input,textarea'))
+			{
+				window.document.activeElement.blur();
+			}
+			else if (force)
 			{
 				window.document.activeElement.blur();
 			}
 		}
-	};
+		catch (e) {} // eslint-disable-line no-empty
+	}
+}
 
-	Utils.removeSelection = function ()
-	{
+/**
+ * @returns {void}
+ */
+export function removeSelection()
+{
+	try {
 		if (window && window.getSelection)
 		{
-			var oSel = window.getSelection();
-			if (oSel && oSel.removeAllRanges)
+			const sel = window.getSelection();
+			if (sel && sel.removeAllRanges)
 			{
-				oSel.removeAllRanges();
+				sel.removeAllRanges();
 			}
 		}
 		else if (window.document && window.document.selection && window.document.selection.empty)
 		{
 			window.document.selection.empty();
 		}
-	};
+	}
+	catch (e) {} // eslint-disable-line no-empty
+}
 
-	/**
-	 * @param {string} sPrefix
-	 * @param {string} sSubject
-	 * @return {string}
-	 */
-	Utils.replySubjectAdd = function (sPrefix, sSubject)
+/**
+ * @param {string} prefix
+ * @param {string} subject
+ * @returns {string}
+ */
+export function replySubjectAdd(prefix, subject)
+{
+	prefix = trim(prefix.toUpperCase());
+	subject = trim(subject.replace(/[\s]+/g, ' '));
+
+	let drop = false,
+		re = 'RE' === prefix,
+		fwd = 'FWD' === prefix;
+
+	const
+		parts = [],
+		prefixIsRe = !fwd;
+
+	if ('' !== subject)
 	{
-		sPrefix = Utils.trim(sPrefix.toUpperCase());
-		sSubject = Utils.trim(sSubject.replace(/[\s]+/g, ' '));
-
-		var
-			bDrop = false,
-			aSubject = [],
-			bRe = 'RE' === sPrefix,
-			bFwd = 'FWD' === sPrefix,
-			bPrefixIsRe = !bFwd
-		;
-
-		if ('' !== sSubject)
-		{
-			_.each(sSubject.split(':'), function (sPart) {
-				var sTrimmedPart = Utils.trim(sPart);
-				if (!bDrop && (/^(RE|FWD)$/i.test(sTrimmedPart) || /^(RE|FWD)[\[\(][\d]+[\]\)]$/i.test(sTrimmedPart)))
+		_.each(subject.split(':'), (part) => {
+			const trimmedPart = trim(part);
+			if (!drop && ((/^(RE|FWD)$/i).test(trimmedPart) || (/^(RE|FWD)[\[\(][\d]+[\]\)]$/i).test(trimmedPart)))
+			{
+				if (!re)
 				{
-					if (!bRe)
-					{
-						bRe = !!(/^RE/i.test(sTrimmedPart));
-					}
-
-					if (!bFwd)
-					{
-						bFwd = !!(/^FWD/i.test(sTrimmedPart));
-					}
+					re = !!(/^RE/i).test(trimmedPart);
 				}
-				else
+
+				if (!fwd)
 				{
-					aSubject.push(sPart);
-					bDrop = true;
+					fwd = !!(/^FWD/i).test(trimmedPart);
 				}
-			});
-		}
+			}
+			else
+			{
+				parts.push(part);
+				drop = true;
+			}
+		});
+	}
 
-		if (bPrefixIsRe)
+	if (prefixIsRe)
+	{
+		re = false;
+	}
+	else
+	{
+		fwd = false;
+	}
+
+	return trim(
+		(prefixIsRe ? 'Re: ' : 'Fwd: ') +
+		(re ? 'Re: ' : '') +
+		(fwd ? 'Fwd: ' : '') +
+		trim(parts.join(':'))
+	);
+}
+
+/**
+ * @param {number} num
+ * @param {number} dec
+ * @returns {number}
+ */
+export function roundNumber(num, dec)
+{
+	return window.Math.round(num * window.Math.pow(10, dec)) / window.Math.pow(10, dec);
+}
+
+/**
+ * @param {(number|string)} sizeInBytes
+ * @returns {string}
+ */
+export function friendlySize(sizeInBytes)
+{
+	sizeInBytes = pInt(sizeInBytes);
+
+	switch (true)
+	{
+		case 1073741824 <= sizeInBytes:
+			return roundNumber(sizeInBytes / 1073741824, 1) + 'GB';
+		case 1048576 <= sizeInBytes:
+			return roundNumber(sizeInBytes / 1048576, 1) + 'MB';
+		case 1024 <= sizeInBytes:
+			return roundNumber(sizeInBytes / 1024, 0) + 'KB';
+		// no default
+	}
+
+	return sizeInBytes + 'B';
+}
+
+/**
+ * @param {string} desc
+ */
+export function log(desc)
+{
+	if (window.console && window.console.log)
+	{
+		window.console.log(desc);
+	}
+}
+
+/**
+ * @param {?} object
+ * @param {string} methodName
+ * @param {Array=} params
+ * @param {number=} delay = 0
+ */
+export function delegateRun(object, methodName, params, delay = 0)
+{
+	if (object && object[methodName])
+	{
+		delay = pInt(delay);
+		params = isArray(params) ? params : [];
+
+		if (0 >= delay)
 		{
-			bRe = false;
+			object[methodName](...params);
 		}
 		else
 		{
-			bFwd = false;
+			_.delay(() => {
+				object[methodName](...params);
+			}, delay);
 		}
+	}
+}
 
-		return Utils.trim(
-			(bPrefixIsRe ? 'Re: ' : 'Fwd: ') +
-			(bRe ? 'Re: ' : '') +
-			(bFwd ? 'Fwd: ' : '') +
-			Utils.trim(aSubject.join(':'))
-		);
-	};
-
-	/**
-	 * @param {number} iNum
-	 * @param {number} iDec
-	 * @return {number}
-	 */
-	Utils.roundNumber = function (iNum, iDec)
+/**
+ * @param {?} event
+ */
+export function killCtrlACtrlS(event)
+{
+	event = event || window.event;
+	if (event && event.ctrlKey && !event.shiftKey && !event.altKey)
 	{
-		return window.Math.round(iNum * window.Math.pow(10, iDec)) / window.Math.pow(10, iDec);
-	};
-
-	/**
-	 * @param {(number|string)} iSizeInBytes
-	 * @return {string}
-	 */
-	Utils.friendlySize = function (iSizeInBytes)
-	{
-		iSizeInBytes = Utils.pInt(iSizeInBytes);
-
-		if (iSizeInBytes >= 1073741824)
+		const key = event.keyCode || event.which;
+		if (key === EventKeyCode.S)
 		{
-			return Utils.roundNumber(iSizeInBytes / 1073741824, 1) + 'GB';
+			event.preventDefault();
+			return;
 		}
-		else if (iSizeInBytes >= 1048576)
+		else if (key === EventKeyCode.A)
 		{
-			return Utils.roundNumber(iSizeInBytes / 1048576, 1) + 'MB';
-		}
-		else if (iSizeInBytes >= 1024)
-		{
-			return Utils.roundNumber(iSizeInBytes / 1024, 0) + 'KB';
-		}
-
-		return iSizeInBytes + 'B';
-	};
-
-	/**
-	 * @param {string} sDesc
-	 */
-	Utils.log = function (sDesc)
-	{
-		if (window.console && window.console.log)
-		{
-			window.console.log(sDesc);
-		}
-	};
-
-	/**
-	 * @param {?} oObject
-	 * @param {string} sMethodName
-	 * @param {Array=} aParameters
-	 * @param {number=} nDelay
-	 */
-	Utils.delegateRun = function (oObject, sMethodName, aParameters, nDelay)
-	{
-		if (oObject && oObject[sMethodName])
-		{
-			nDelay = Utils.pInt(nDelay);
-			if (0 >= nDelay)
+			const sender = event.target || event.srcElement;
+			if (sender && ('true' === '' + sender.contentEditable ||
+				(sender.tagName && sender.tagName.match(/INPUT|TEXTAREA/i))))
 			{
-				oObject[sMethodName].apply(oObject, Utils.isArray(aParameters) ? aParameters : []);
+				return;
+			}
+
+			if (window.getSelection)
+			{
+				window.getSelection().removeAllRanges();
+			}
+			else if (window.document.selection && window.document.selection.clear)
+			{
+				window.document.selection.clear();
+			}
+
+			event.preventDefault();
+		}
+	}
+}
+
+/**
+ * @param {(Object|null|undefined)} context
+ * @param {Function} fExecute
+ * @param {(Function|boolean|null)=} fCanExecute = true
+ * @returns {Function}
+ */
+export function createCommandLegacy(context, fExecute, fCanExecute = true)
+{
+	let fResult = null;
+	const fNonEmpty = (...args) => {
+		if (fResult && fResult.canExecute && fResult.canExecute())
+		{
+			fExecute.apply(context, args);
+		}
+		return false;
+	};
+
+	fResult = fExecute ? fNonEmpty : noop;
+	fResult.enabled = ko.observable(true);
+	fResult.isCommand = true;
+
+	if (isFunc(fCanExecute))
+	{
+		fResult.canExecute = ko.computed(() => fResult && fResult.enabled() && fCanExecute.call(context));
+	}
+	else
+	{
+		fResult.canExecute = ko.computed(() => fResult && fResult.enabled() && !!fCanExecute);
+	}
+
+	return fResult;
+}
+
+/**
+ * @param {string} theme
+ * @returns {string}
+ */
+export const convertThemeName = _.memoize((theme) => {
+
+	if ('@custom' === theme.substr(-7))
+	{
+		theme = trim(theme.substring(0, theme.length - 7));
+	}
+
+	return trim(theme.replace(/[^a-zA-Z0-9]+/g, ' ').replace(/([A-Z])/g, ' $1').replace(/[\s]+/g, ' '));
+});
+
+/**
+ * @param {string} name
+ * @returns {string}
+ */
+export function quoteName(name)
+{
+	return name.replace(/["]/g, '\\"');
+}
+
+/**
+ * @returns {number}
+ */
+export function microtime()
+{
+	return (new window.Date()).getTime();
+}
+
+/**
+ * @returns {number}
+ */
+export function timestamp()
+{
+	return window.Math.round(microtime() / 1000);
+}
+
+/**
+ *
+ * @param {string} language
+ * @param {boolean=} isEng = false
+ * @returns {string}
+ */
+export function convertLangName(language, isEng = false)
+{
+	return require('Common/Translator').i18n('LANGS_NAMES' + (true === isEng ? '_EN' : '') + '/LANG_' +
+		language.toUpperCase().replace(/[^a-zA-Z0-9]+/g, '_'), null, language);
+}
+
+/**
+ * @returns {object}
+ */
+export function draggablePlace()
+{
+	return $('<div class="draggablePlace">' +
+		'<span class="text"></span>&nbsp;' +
+		'<i class="icon-copy icon-white visible-on-ctrl"></i>' +
+		'<i class="icon-mail icon-white hidden-on-ctrl"></i>' +
+		'</div>'
+	).appendTo('#rl-hidden');
+}
+
+/**
+ * @param {object} domOption
+ * @param {object} item
+ * @returns {void}
+ */
+export function defautOptionsAfterRender(domItem, item)
+{
+	if (item && !isUnd(item.disabled) && domItem)
+	{
+		$(domItem)
+			.toggleClass('disabled', item.disabled)
+			.prop('disabled', item.disabled);
+	}
+}
+
+/**
+ * @param {string} title
+ * @param {Object} body
+ * @param {boolean} isHtml
+ * @param {boolean} print
+ */
+export function clearBqSwitcher(body)
+{
+	body.find('blockquote.rl-bq-switcher').removeClass('rl-bq-switcher hidden-bq');
+	body.find('.rlBlockquoteSwitcher').off('.rlBlockquoteSwitcher').remove();
+	body.find('[data-html-editor-font-wrapper]').removeAttr('data-html-editor-font-wrapper');
+}
+
+/**
+ * @param {object} messageData
+ * @param {Object} body
+ * @param {boolean} isHtml
+ * @param {boolean} print
+ * @returns {void}
+ */
+export function previewMessage({title, subject, date, fromCreds, toCreds, toLabel, ccClass, ccCreds, ccLabel}, body, isHtml, print)
+{
+	const
+		win = window.open(''),
+		doc = win.document,
+		bodyClone = body.clone(),
+		bodyClass = isHtml ? 'html' : 'plain';
+
+	clearBqSwitcher(bodyClone);
+
+	const html = bodyClone ? bodyClone.html() : '';
+
+	doc.write(require('Html/PreviewMessage.html')
+		.replace('{{title}}', encodeHtml(title))
+		.replace('{{subject}}', encodeHtml(subject))
+		.replace('{{date}}', encodeHtml(date))
+		.replace('{{fromCreds}}', encodeHtml(fromCreds))
+		.replace('{{toCreds}}', encodeHtml(toCreds))
+		.replace('{{toLabel}}', encodeHtml(toLabel))
+		.replace('{{ccClass}}', encodeHtml(ccClass))
+		.replace('{{ccCreds}}', encodeHtml(ccCreds))
+		.replace('{{ccLabel}}', encodeHtml(ccLabel))
+		.replace('{{bodyClass}}', bodyClass)
+		.replace('{{html}}', html)
+	);
+
+	doc.close();
+
+	if (print)
+	{
+		window.setTimeout(() => win.print(), 100);
+	}
+}
+
+/**
+ * @param {Function} fCallback
+ * @param {?} koTrigger
+ * @param {?} context = null
+ * @param {number=} timer = 1000
+ * @returns {Function}
+ */
+export function settingsSaveHelperFunction(fCallback, koTrigger, context = null, timer = 1000)
+{
+	timer = pInt(timer);
+	return (type, data, cached, requestAction, requestParameters) => {
+		koTrigger.call(context, data && data.Result ? SaveSettingsStep.TrueResult : SaveSettingsStep.FalseResult);
+		if (fCallback)
+		{
+			fCallback.call(context, type, data, cached, requestAction, requestParameters);
+		}
+		_.delay(() => {
+			koTrigger.call(context, SaveSettingsStep.Idle);
+		}, timer);
+	};
+}
+
+/**
+ * @param {object} koTrigger
+ * @param {mixed} context
+ * @returns {mixed}
+ */
+export function settingsSaveHelperSimpleFunction(koTrigger, context)
+{
+	return settingsSaveHelperFunction(null, koTrigger, context, 1000);
+}
+
+/**
+ * @param {object} remote
+ * @param {string} settingName
+ * @param {string} type
+ * @param {function} fTriggerFunction
+ * @returns {function}
+ */
+export function settingsSaveHelperSubscribeFunction(remote, settingName, type, fTriggerFunction)
+{
+	return (value) => {
+
+		if (remote)
+		{
+			switch (type)
+			{
+				case 'bool':
+				case 'boolean':
+					value = value ? '1' : '0';
+					break;
+				case 'int':
+				case 'integer':
+				case 'number':
+					value = pInt(value);
+					break;
+				case 'trim':
+					value = trim(value);
+					break;
+				default:
+					value = pString(value);
+					break;
+			}
+
+			const data = {};
+			data[settingName] = value;
+
+			if (remote.saveAdminConfig)
+			{
+				remote.saveAdminConfig(fTriggerFunction || null, data);
+			}
+			else if (remote.saveSettings)
+			{
+				remote.saveSettings(fTriggerFunction || null, data);
+			}
+		}
+	};
+}
+
+/**
+ * @param {string} html
+ * @returns {string}
+ */
+export function findEmailAndLinks(html)
+{
+//	return html;
+	return Autolinker ? Autolinker.link(html, {
+		newWindow: true,
+		stripPrefix: false,
+		urls: true,
+		email: true,
+		mention: false,
+		phone: false,
+		hashtag: false,
+		replaceFn: function(match) {
+			return !(match && 'url' === match.getType() && match.matchedText && 0 !== match.matchedText.indexOf('http'));
+		}
+	}) : html;
+}
+
+/**
+ * @param {string} html
+ * @returns {string}
+ */
+export function htmlToPlain(html)
+{
+	let
+		pos = 0,
+		limit = 0,
+		iP1 = 0,
+		iP2 = 0,
+		iP3 = 0,
+
+		text = '';
+
+	const convertBlockquote = (blockquoteText) => {
+		blockquoteText = '> ' + trim(blockquoteText).replace(/\n/gm, '\n> ');
+		return blockquoteText.replace(/(^|\n)([> ]+)/gm,
+			(...args) => (args && 2 < args.length ? args[1] + trim(args[2].replace(/[\s]/g, '')) + ' ' : ''));
+	};
+
+	const convertDivs = (...args) => {
+		if (args && 1 < args.length)
+		{
+			let divText = trim(args[1]);
+			if (0 < divText.length)
+			{
+				divText = divText.replace(/<div[^>]*>([\s\S\r\n]*)<\/div>/gmi, convertDivs);
+				divText = '\n' + trim(divText) + '\n';
+			}
+
+			return divText;
+		}
+
+		return '';
+	};
+
+	const
+		convertPre = (...args) => (args && 1 < args.length ? args[1].toString().replace(/[\n]/gm, '<br />').replace(/[\r]/gm, '') : ''),
+		fixAttibuteValue = (...args) => (args && 1 < args.length ? '' + args[1] + _.escape(args[2]) : ''),
+		convertLinks = (...args) => (args && 1 < args.length ? trim(args[1]) : '');
+
+	text = html
+		.replace(/<p[^>]*><\/p>/gi, '')
+		.replace(/<pre[^>]*>([\s\S\r\n\t]*)<\/pre>/gmi, convertPre)
+		.replace(/[\s]+/gm, ' ')
+		.replace(/((?:href|data)\s?=\s?)("[^"]+?"|'[^']+?')/gmi, fixAttibuteValue)
+		.replace(/<br[^>]*>/gmi, '\n')
+		.replace(/<\/h[\d]>/gi, '\n')
+		.replace(/<\/p>/gi, '\n\n')
+		.replace(/<ul[^>]*>/gmi, '\n')
+		.replace(/<\/ul>/gi, '\n')
+		.replace(/<li[^>]*>/gmi, ' * ')
+		.replace(/<\/li>/gi, '\n')
+		.replace(/<\/td>/gi, '\n')
+		.replace(/<\/tr>/gi, '\n')
+		.replace(/<hr[^>]*>/gmi, '\n_______________________________\n\n')
+		.replace(/<div[^>]*>([\s\S\r\n]*)<\/div>/gmi, convertDivs)
+		.replace(/<blockquote[^>]*>/gmi, '\n__bq__start__\n')
+		.replace(/<\/blockquote>/gmi, '\n__bq__end__\n')
+		.replace(/<a [^>]*>([\s\S\r\n]*?)<\/a>/gmi, convertLinks)
+		.replace(/<\/div>/gi, '\n')
+		.replace(/&nbsp;/gi, ' ')
+		.replace(/&quot;/gi, '"')
+		.replace(/<[^>]*>/gm, '');
+
+	text = $div.html(text).text();
+
+	text = text
+		.replace(/\n[ \t]+/gm, '\n')
+		.replace(/[\n]{3,}/gm, '\n\n')
+		.replace(/&gt;/gi, '>')
+		.replace(/&lt;/gi, '<')
+		.replace(/&amp;/gi, '&');
+
+	text = splitPlainText(text);
+
+	pos = 0;
+	limit = 800;
+
+	while (0 < limit)
+	{
+		limit -= 1;
+		iP1 = text.indexOf('__bq__start__', pos);
+		if (-1 < iP1)
+		{
+			iP2 = text.indexOf('__bq__start__', iP1 + 5);
+			iP3 = text.indexOf('__bq__end__', iP1 + 5);
+
+			if ((-1 === iP2 || iP3 < iP2) && iP1 < iP3)
+			{
+				text = text.substring(0, iP1) +
+					convertBlockquote(text.substring(iP1 + 13, iP3)) +
+					text.substring(iP3 + 11);
+
+				pos = 0;
+			}
+			else if (-1 < iP2 && iP2 < iP3)
+			{
+				pos = iP2 - 1;
 			}
 			else
 			{
-				_.delay(function () {
-					oObject[sMethodName].apply(oObject, Utils.isArray(aParameters) ? aParameters : []);
-				}, nDelay);
+				pos = 0;
 			}
-		}
-	};
-
-	/**
-	 * @param {?} oEvent
-	 */
-	Utils.killCtrlAandS = function (oEvent)
-	{
-		oEvent = oEvent || window.event;
-		if (oEvent && oEvent.ctrlKey && !oEvent.shiftKey && !oEvent.altKey)
-		{
-			var
-				oSender = oEvent.target || oEvent.srcElement,
-				iKey = oEvent.keyCode || oEvent.which
-			;
-
-			if (iKey === Enums.EventKeyCode.S)
-			{
-				oEvent.preventDefault();
-				return;
-			}
-
-			if (oSender && oSender.tagName && oSender.tagName.match(/INPUT|TEXTAREA/i))
-			{
-				return;
-			}
-
-			if (iKey === Enums.EventKeyCode.A)
-			{
-				if (window.getSelection)
-				{
-					window.getSelection().removeAllRanges();
-				}
-				else if (window.document.selection && window.document.selection.clear)
-				{
-					window.document.selection.clear();
-				}
-
-				oEvent.preventDefault();
-			}
-		}
-	};
-
-	/**
-	 * @param {(Object|null|undefined)} oContext
-	 * @param {Function} fExecute
-	 * @param {(Function|boolean|null)=} fCanExecute
-	 * @return {Function}
-	 */
-	Utils.createCommand = function (oContext, fExecute, fCanExecute)
-	{
-		var
-			fNonEmpty = function () {
-				if (fResult && fResult.canExecute && fResult.canExecute())
-				{
-					fExecute.apply(oContext, Array.prototype.slice.call(arguments));
-				}
-				return false;
-			},
-			fResult = fExecute ? fNonEmpty : Utils.emptyFunction
-		;
-
-		fResult.enabled = ko.observable(true);
-
-		fCanExecute = Utils.isUnd(fCanExecute) ? true : fCanExecute;
-		if (Utils.isFunc(fCanExecute))
-		{
-			fResult.canExecute = ko.computed(function () {
-				return fResult.enabled() && fCanExecute.call(oContext);
-			});
 		}
 		else
 		{
-			fResult.canExecute = ko.computed(function () {
-				return fResult.enabled() && !!fCanExecute;
-			});
+			break;
 		}
+	}
 
-		return fResult;
-	};
+	text = text
+		.replace(/__bq__start__/gm, '')
+		.replace(/__bq__end__/gm, '');
 
-	/**
-	 * @param {{moment:Function}} oObject
-	 */
-	Utils.createMomentDate = function (oObject)
+	return text;
+}
+
+/**
+ * @param {string} plain
+ * @param {boolean} findEmailAndLinksInText = false
+ * @returns {string}
+ */
+export function plainToHtml(plain, findEmailAndLinksInText = false)
+{
+	plain = plain.toString().replace(/\r/g, '');
+	plain = plain.replace(/^>[> ]>+/gm, ([match]) => (match ? match.replace(/[ ]+/g, '') : match));
+
+	let
+		bIn = false,
+		bDo = true,
+		bStart = true,
+		aNextText = [],
+		sLine = '',
+		iIndex = 0,
+		aText = plain.split('\n');
+
+	do
 	{
-		if (Utils.isUnd(oObject.moment))
+		bDo = false;
+		aNextText = [];
+		for (iIndex = 0; iIndex < aText.length; iIndex++)
 		{
-			oObject.moment = ko.observable(moment());
-		}
-
-		return ko.computed(function () {
-			Globals.momentTrigger();
-			var oMoment = this.moment();
-			return 1970 === oMoment.year() ? '' : oMoment.fromNow();
-		}, oObject);
-	};
-
-	/**
-	 * @param {{moment:Function, momentDate:Function}} oObject
-	 */
-	Utils.createMomentShortDate = function (oObject)
-	{
-		return ko.computed(function () {
-
-			var
-				sResult = '',
-				oMomentNow = moment(),
-				oMoment = this.moment(),
-				sMomentDate = this.momentDate()
-			;
-
-			if (1970 === oMoment.year())
+			sLine = aText[iIndex];
+			bStart = '>' === sLine.substr(0, 1);
+			if (bStart && !bIn)
 			{
-				sResult = '';
+				bDo = true;
+				bIn = true;
+				aNextText.push('~~~blockquote~~~');
+				aNextText.push(sLine.substr(1));
 			}
-			else if (4 >= oMomentNow.diff(oMoment, 'hours'))
+			else if (!bStart && bIn)
 			{
-				sResult = sMomentDate;
-			}
-			else if (oMomentNow.format('L') === oMoment.format('L'))
-			{
-				sResult = require('Common/Translator').i18n('MESSAGE_LIST/TODAY_AT', {
-					'TIME': oMoment.format('LT')
-				});
-			}
-			else if (oMomentNow.clone().subtract('days', 1).format('L') === oMoment.format('L'))
-			{
-				sResult = require('Common/Translator').i18n('MESSAGE_LIST/YESTERDAY_AT', {
-					'TIME': oMoment.format('LT')
-				});
-			}
-			else if (oMomentNow.year() === oMoment.year())
-			{
-				sResult = oMoment.format('D MMM.');
-			}
-			else
-			{
-				sResult = oMoment.format('LL');
-			}
-
-			return sResult;
-
-		}, oObject);
-	};
-
-	/**
-	 * @param {string} sTheme
-	 * @return {string}
-	 */
-	Utils.convertThemeName = function (sTheme)
-	{
-		if ('@custom' === sTheme.substr(-7))
-		{
-			sTheme = Utils.trim(sTheme.substring(0, sTheme.length - 7));
-		}
-
-		return Utils.trim(sTheme.replace(/[^a-zA-Z0-9]+/g, ' ').replace(/([A-Z])/g, ' $1').replace(/[\s]+/g, ' '));
-	};
-
-	/**
-	 * @param {string} sName
-	 * @return {string}
-	 */
-	Utils.quoteName = function (sName)
-	{
-		return sName.replace(/["]/g, '\\"');
-	};
-
-	/**
-	 * @return {number}
-	 */
-	Utils.microtime = function ()
-	{
-		return (new Date()).getTime();
-	};
-
-	/**
-	 * @return {number}
-	 */
-	Utils.timestamp = function ()
-	{
-		return window.Math.round(Utils.microtime() / 1000);
-	};
-
-	/**
-	 *
-	 * @param {string} sLanguage
-	 * @param {boolean=} bEng = false
-	 * @return {string}
-	 */
-	Utils.convertLangName = function (sLanguage, bEng)
-	{
-		return require('Common/Translator').i18n('LANGS_NAMES' + (true === bEng ? '_EN' : '') + '/LANG_' +
-			sLanguage.toUpperCase().replace(/[^a-zA-Z0-9]+/g, '_'), null, sLanguage);
-	};
-
-	/**
-	 * @param {number=} iLen
-	 * @return {string}
-	 */
-	Utils.fakeMd5 = function(iLen)
-	{
-		var
-			sResult = '',
-			sLine = '0123456789abcdefghijklmnopqrstuvwxyz'
-		;
-
-		iLen = Utils.isUnd(iLen) ? 32 : Utils.pInt(iLen);
-
-		while (sResult.length < iLen)
-		{
-			sResult += sLine.substr(window.Math.round(window.Math.random() * sLine.length), 1);
-		}
-
-		return sResult;
-	};
-
-	Utils.draggablePlace = function ()
-	{
-		return $('<div class="draggablePlace">' +
-			'<span class="text"></span>&nbsp;' +
-			'<i class="icon-copy icon-white visible-on-ctrl"></i><i class="icon-mail icon-white hidden-on-ctrl"></i></div>').appendTo('#rl-hidden');
-	};
-
-	Utils.defautOptionsAfterRender = function (oDomOption, oItem)
-	{
-		if (oItem && !Utils.isUnd(oItem.disabled) && oDomOption)
-		{
-			$(oDomOption)
-				.toggleClass('disabled', oItem.disabled)
-				.prop('disabled', oItem.disabled)
-			;
-		}
-	};
-
-	/**
-	 * @param {Object} oViewModel
-	 * @param {string} sTemplateID
-	 * @param {string} sTitle
-	 * @param {Function=} fCallback
-	 */
-	Utils.windowPopupKnockout = function (oViewModel, sTemplateID, sTitle, fCallback)
-	{
-		var
-			oScript = null,
-			oWin = window.open(''),
-			sFunc = '__OpenerApplyBindingsUid' + Utils.fakeMd5() + '__',
-			oTemplate = $('#' + sTemplateID)
-		;
-
-		window[sFunc] = function () {
-
-			if (oWin && oWin.document.body && oTemplate && oTemplate[0])
-			{
-				var oBody = $(oWin.document.body);
-
-				$('#rl-content', oBody).html(oTemplate.html());
-				$('html', oWin.document).addClass('external ' + $('html').attr('class'));
-
-				require('Common/Translator').i18nToNode(oBody);
-
-				if (oViewModel && $('#rl-content', oBody)[0])
+				if ('' !== sLine)
 				{
-					ko.applyBindings(oViewModel, $('#rl-content', oBody)[0]);
-				}
-
-				window[sFunc] = null;
-
-				fCallback(oWin);
-			}
-		};
-
-		oWin.document.open();
-		oWin.document.write('<html><head>' +
-'<meta charset="utf-8" />' +
-'<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />' +
-'<meta name="viewport" content="user-scalable=no" />' +
-'<meta name="apple-mobile-web-app-capable" content="yes" />' +
-'<meta name="robots" content="noindex, nofollow, noodp" />' +
-'<title>' + Utils.encodeHtml(sTitle) + '</title>' +
-'</head><body><div id="rl-content"></div></body></html>');
-		oWin.document.close();
-
-		oScript = oWin.document.createElement('script');
-		oScript.type = 'text/javascript';
-		oScript.innerHTML = 'if(window&&window.opener&&window.opener[\'' + sFunc + '\']){window.opener[\'' + sFunc + '\']();window.opener[\'' + sFunc + '\']=null}';
-		oWin.document.getElementsByTagName('head')[0].appendChild(oScript);
-	};
-
-	/**
-	 * @param {Function} fCallback
-	 * @param {?} koTrigger
-	 * @param {?} oContext = null
-	 * @param {number=} iTimer = 1000
-	 * @return {Function}
-	 */
-	Utils.settingsSaveHelperFunction = function (fCallback, koTrigger, oContext, iTimer)
-	{
-		oContext = oContext || null;
-		iTimer = Utils.isUnd(iTimer) ? 1000 : Utils.pInt(iTimer);
-
-		return function (sType, mData, bCached, sRequestAction, oRequestParameters) {
-			koTrigger.call(oContext, mData && mData['Result'] ? Enums.SaveSettingsStep.TrueResult : Enums.SaveSettingsStep.FalseResult);
-			if (fCallback)
-			{
-				fCallback.call(oContext, sType, mData, bCached, sRequestAction, oRequestParameters);
-			}
-			_.delay(function () {
-				koTrigger.call(oContext, Enums.SaveSettingsStep.Idle);
-			}, iTimer);
-		};
-	};
-
-	Utils.settingsSaveHelperSimpleFunction = function (koTrigger, oContext)
-	{
-		return Utils.settingsSaveHelperFunction(null, koTrigger, oContext, 1000);
-	};
-
-	Utils.settingsSaveHelperSubscribeFunction = function (oRemote, sSettingName, sType, fTriggerFunction)
-	{
-		return function (mValue) {
-
-			if (oRemote)
-			{
-				switch (sType)
-				{
-					default:
-						mValue = Utils.pString(mValue);
-						break;
-					case 'bool':
-					case 'boolean':
-						mValue = mValue ? '1' : '0';
-						break;
-					case 'int':
-					case 'integer':
-					case 'number':
-						mValue = Utils.pInt(mValue);
-						break;
-					case 'trim':
-						mValue = Utils.trim(mValue);
-						break;
-				}
-
-				var oData = {};
-				oData[sSettingName] = mValue;
-
-				if (oRemote.saveAdminConfig)
-				{
-					oRemote.saveAdminConfig(fTriggerFunction || null, oData);
-				}
-				else if (oRemote.saveSettings)
-				{
-					oRemote.saveSettings(fTriggerFunction || null, oData);
-				}
-			}
-		};
-	};
-
-	/**
-	 * @param {string} sHtml
-	 * @return {string}
-	 */
-	Utils.htmlToPlain = function (sHtml)
-	{
-		var
-			iPos = 0,
-			iP1 = 0,
-			iP2 = 0,
-			iP3 = 0,
-			iLimit = 0,
-
-			sText = '',
-
-			splitPlainText = function (sText)
-			{
-				var
-					iLen = 100,
-					sPrefix = '',
-					sSubText = '',
-					sResult = sText,
-					iSpacePos = 0,
-					iNewLinePos = 0
-				;
-
-				while (sResult.length > iLen)
-				{
-					sSubText = sResult.substring(0, iLen);
-					iSpacePos = sSubText.lastIndexOf(' ');
-					iNewLinePos = sSubText.lastIndexOf('\n');
-
-					if (-1 !== iNewLinePos)
-					{
-						iSpacePos = iNewLinePos;
-					}
-
-					if (-1 === iSpacePos)
-					{
-						iSpacePos = iLen;
-					}
-
-					sPrefix += sSubText.substring(0, iSpacePos) + '\n';
-					sResult = sResult.substring(iSpacePos + 1);
-				}
-
-				return sPrefix + sResult;
-			},
-
-			convertBlockquote = function (sText) {
-				sText = splitPlainText($.trim(sText));
-				sText = '> ' + sText.replace(/\n/gm, '\n> ');
-				return sText.replace(/(^|\n)([> ]+)/gm, function () {
-					return (arguments && 2 < arguments.length) ? arguments[1] + $.trim(arguments[2].replace(/[\s]/g, '')) + ' ' : '';
-				});
-			},
-
-			convertDivs = function () {
-				if (arguments && 1 < arguments.length)
-				{
-					var sText = $.trim(arguments[1]);
-					if (0 < sText.length)
-					{
-						sText = sText.replace(/<div[^>]*>([\s\S\r\n]*)<\/div>/gmi, convertDivs);
-						sText = '\n' + $.trim(sText) + '\n';
-					}
-
-					return sText;
-				}
-
-				return '';
-			},
-
-			convertPre = function () {
-				return (arguments && 1 < arguments.length) ? arguments[1].toString().replace(/[\n]/gm, '<br />') : '';
-			},
-
-			fixAttibuteValue = function () {
-				return (arguments && 1 < arguments.length) ?
-					'' + arguments[1] + arguments[2].replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
-			},
-
-			convertLinks = function () {
-				return (arguments && 1 < arguments.length) ? $.trim(arguments[1]) : '';
-			}
-		;
-
-		sText = sHtml
-			.replace(/<pre[^>]*>([\s\S\r\n]*)<\/pre>/gmi, convertPre)
-			.replace(/[\s]+/gm, ' ')
-			.replace(/((?:href|data)\s?=\s?)("[^"]+?"|'[^']+?')/gmi, fixAttibuteValue)
-			.replace(/<br[^>]*>/gmi, '\n')
-			.replace(/<\/h[\d]>/gi, '\n')
-			.replace(/<\/p>/gi, '\n\n')
-			.replace(/<\/li>/gi, '\n')
-			.replace(/<\/td>/gi, '\n')
-			.replace(/<\/tr>/gi, '\n')
-			.replace(/<hr[^>]*>/gmi, '\n_______________________________\n\n')
-			.replace(/<div[^>]*>([\s\S\r\n]*)<\/div>/gmi, convertDivs)
-			.replace(/<blockquote[^>]*>/gmi, '\n__bq__start__\n')
-			.replace(/<\/blockquote>/gmi, '\n__bq__end__\n')
-			.replace(/<a [^>]*>([\s\S\r\n]*?)<\/a>/gmi, convertLinks)
-			.replace(/<\/div>/gi, '\n')
-			.replace(/&nbsp;/gi, ' ')
-			.replace(/&quot;/gi, '"')
-			.replace(/<[^>]*>/gm, '')
-		;
-
-		sText = Globals.$div.html(sText).text();
-
-		sText = sText
-			.replace(/\n[ \t]+/gm, '\n')
-			.replace(/[\n]{3,}/gm, '\n\n')
-			.replace(/&gt;/gi, '>')
-			.replace(/&lt;/gi, '<')
-			.replace(/&amp;/gi, '&')
-		;
-
-		iPos = 0;
-		iLimit = 100;
-
-		while (0 < iLimit)
-		{
-			iLimit--;
-			iP1 = sText.indexOf('__bq__start__', iPos);
-			if (-1 < iP1)
-			{
-				iP2 = sText.indexOf('__bq__start__', iP1 + 5);
-				iP3 = sText.indexOf('__bq__end__', iP1 + 5);
-
-				if ((-1 === iP2 || iP3 < iP2) && iP1 < iP3)
-				{
-					sText = sText.substring(0, iP1) +
-						convertBlockquote(sText.substring(iP1 + 13, iP3)) +
-						sText.substring(iP3 + 11);
-
-					iPos = 0;
-				}
-				else if (-1 < iP2 && iP2 < iP3)
-				{
-					iPos = iP2 - 1;
-				}
-				else
-				{
-					iPos = 0;
-				}
-			}
-			else
-			{
-				break;
-			}
-		}
-
-		sText = sText
-			.replace(/__bq__start__/gm, '')
-			.replace(/__bq__end__/gm, '')
-		;
-
-		return sText;
-	};
-
-	/**
-	 * @param {string} sPlain
-	 * @param {boolean} bFindEmailAndLinks = false
-	 * @return {string}
-	 */
-	Utils.plainToHtml = function (sPlain, bFindEmailAndLinks)
-	{
-		sPlain = sPlain.toString().replace(/\r/g, '');
-
-		bFindEmailAndLinks = Utils.isUnd(bFindEmailAndLinks) ? false : !!bFindEmailAndLinks;
-
-		var
-			bIn = false,
-			bDo = true,
-			bStart = true,
-			aNextText = [],
-			sLine = '',
-			iIndex = 0,
-			aText = sPlain.split("\n")
-		;
-
-		do
-		{
-			bDo = false;
-			aNextText = [];
-			for (iIndex = 0; iIndex < aText.length; iIndex++)
-			{
-				sLine = aText[iIndex];
-				bStart = '>' === sLine.substr(0, 1);
-				if (bStart && !bIn)
-				{
-					bDo = true;
-					bIn = true;
-					aNextText.push('~~~blockquote~~~');
-					aNextText.push(sLine.substr(1));
-				}
-				else if (!bStart && bIn)
-				{
-					if ('' !== sLine)
-					{
-						bIn = false;
-						aNextText.push('~~~/blockquote~~~');
-						aNextText.push(sLine);
-					}
-					else
-					{
-						aNextText.push(sLine);
-					}
-				}
-				else if (bStart && bIn)
-				{
-					aNextText.push(sLine.substr(1));
+					bIn = false;
+					aNextText.push('~~~/blockquote~~~');
+					aNextText.push(sLine);
 				}
 				else
 				{
 					aNextText.push(sLine);
 				}
 			}
-
-			if (bIn)
+			else if (bStart && bIn)
 			{
-				bIn = false;
-				aNextText.push('~~~/blockquote~~~');
-			}
-
-			aText = aNextText;
-		}
-		while (bDo);
-
-		sPlain = aText.join("\n");
-
-		sPlain = sPlain
-//			.replace(/~~~\/blockquote~~~\n~~~blockquote~~~/g, '\n')
-			.replace(/&/g, '&amp;')
-			.replace(/>/g, '&gt;').replace(/</g, '&lt;')
-			.replace(/~~~blockquote~~~[\s]*/g, '<blockquote>')
-			.replace(/[\s]*~~~\/blockquote~~~/g, '</blockquote>')
-			.replace(/\n/g, '<br />')
-		;
-
-		return bFindEmailAndLinks ? Utils.findEmailAndLinks(sPlain) : sPlain;
-	};
-
-	window.rainloop_Utils_htmlToPlain = Utils.htmlToPlain;
-	window.rainloop_Utils_plainToHtml = Utils.plainToHtml;
-
-	/**
-	 * @param {string} sHtml
-	 * @return {string}
-	 */
-	Utils.findEmailAndLinks = function (sHtml)
-	{
-		sHtml = Autolinker.link(sHtml, {
-			'newWindow': true,
-			'stripPrefix': false,
-			'urls': true,
-			'email': true,
-			'twitter': false,
-			'replaceFn': function (autolinker, match) {
-				return !(autolinker && match && 'url' === match.getType() && match.matchedText && 0 !== match.matchedText.indexOf('http'));
-			}
-		});
-
-		return sHtml;
-	};
-
-	/**
-	 * @param {string} sUrl
-	 * @param {number} iValue
-	 * @param {Function} fCallback
-	 */
-	Utils.resizeAndCrop = function (sUrl, iValue, fCallback)
-	{
-		var oTempImg = new window.Image();
-		oTempImg.onload = function() {
-
-			var
-				aDiff = [0, 0],
-				oCanvas = window.document.createElement('canvas'),
-				oCtx = oCanvas.getContext('2d')
-			;
-
-			oCanvas.width = iValue;
-			oCanvas.height = iValue;
-
-			if (this.width > this.height)
-			{
-				aDiff = [this.width - this.height, 0];
+				aNextText.push(sLine.substr(1));
 			}
 			else
 			{
-				aDiff = [0, this.height - this.width];
+				aNextText.push(sLine);
 			}
+		}
 
-			oCtx.fillStyle = '#fff';
-			oCtx.fillRect(0, 0, iValue, iValue);
-			oCtx.drawImage(this, aDiff[0] / 2, aDiff[1] / 2, this.width - aDiff[0], this.height - aDiff[1], 0, 0, iValue, iValue);
+		if (bIn)
+		{
+			bIn = false;
+			aNextText.push('~~~/blockquote~~~');
+		}
 
-			fCallback(oCanvas.toDataURL('image/jpeg'));
-		};
+		aText = aNextText;
+	}
+	while (bDo);
 
-		oTempImg.src = sUrl;
-	};
+	plain = aText.join('\n');
 
-	/**
-	 * @param {Array} aSystem
-	 * @param {Array} aList
-	 * @param {Array=} aDisabled
-	 * @param {Array=} aHeaderLines
-	 * @param {?number=} iUnDeep
-	 * @param {Function=} fDisableCallback
-	 * @param {Function=} fVisibleCallback
-	 * @param {Function=} fRenameCallback
-	 * @param {boolean=} bSystem
-	 * @param {boolean=} bBuildUnvisible
-	 * @return {Array}
-	 */
-	Utils.folderListOptionsBuilder = function (aSystem, aList, aDisabled, aHeaderLines,
-		iUnDeep, fDisableCallback, fVisibleCallback, fRenameCallback, bSystem, bBuildUnvisible)
+	plain = plain
+		// .replace(/~~~\/blockquote~~~\n~~~blockquote~~~/g, '\n')
+		.replace(/&/g, '&amp;')
+		.replace(/>/g, '&gt;').replace(/</g, '&lt;')
+		.replace(/~~~blockquote~~~[\s]*/g, '<blockquote>')
+		.replace(/[\s]*~~~\/blockquote~~~/g, '</blockquote>')
+		.replace(/\n/g, '<br />');
+
+	return findEmailAndLinksInText ? findEmailAndLinks(plain) : plain;
+}
+
+window['rainloop_Utils_htmlToPlain'] = htmlToPlain; // eslint-disable-line dot-notation
+window['rainloop_Utils_plainToHtml'] = plainToHtml; // eslint-disable-line dot-notation
+
+/**
+ * @param {Array} aSystem
+ * @param {Array} aList
+ * @param {Array=} aDisabled
+ * @param {Array=} aHeaderLines
+ * @param {?number=} iUnDeep
+ * @param {Function=} fDisableCallback
+ * @param {Function=} fVisibleCallback
+ * @param {Function=} fRenameCallback
+ * @param {boolean=} bSystem
+ * @param {boolean=} bBuildUnvisible
+ * @returns {Array}
+ */
+export function folderListOptionsBuilder(aSystem, aList, aDisabled, aHeaderLines,
+	iUnDeep, fDisableCallback, fVisibleCallback, fRenameCallback, bSystem, bBuildUnvisible)
+{
+	let
+		/**
+		 * @type {?FolderModel}
+		 */
+		oItem = null,
+		bSep = false,
+		iIndex = 0,
+		iLen = 0,
+		aResult = [];
+
+	const sDeepPrefix = '\u00A0\u00A0\u00A0';
+
+	bBuildUnvisible = isUnd(bBuildUnvisible) ? false : !!bBuildUnvisible;
+	bSystem = !isNormal(bSystem) ? 0 < aSystem.length : bSystem;
+	iUnDeep = !isNormal(iUnDeep) ? 0 : iUnDeep;
+	fDisableCallback = isNormal(fDisableCallback) ? fDisableCallback : null;
+	fVisibleCallback = isNormal(fVisibleCallback) ? fVisibleCallback : null;
+	fRenameCallback = isNormal(fRenameCallback) ? fRenameCallback : null;
+
+	if (!isArray(aDisabled))
 	{
-		var
-			/**
-			 * @type {?FolderModel}
-			 */
-			oItem = null,
-			bSep = false,
-			iIndex = 0,
-			iLen = 0,
-			sDeepPrefix = '\u00A0\u00A0\u00A0',
-			aResult = []
-		;
+		aDisabled = [];
+	}
 
-		bBuildUnvisible = Utils.isUnd(bBuildUnvisible) ? false : !!bBuildUnvisible;
-		bSystem = !Utils.isNormal(bSystem) ? 0 < aSystem.length : bSystem;
-		iUnDeep = !Utils.isNormal(iUnDeep) ? 0 : iUnDeep;
-		fDisableCallback = Utils.isNormal(fDisableCallback) ? fDisableCallback : null;
-		fVisibleCallback = Utils.isNormal(fVisibleCallback) ? fVisibleCallback : null;
-		fRenameCallback = Utils.isNormal(fRenameCallback) ? fRenameCallback : null;
+	if (!isArray(aHeaderLines))
+	{
+		aHeaderLines = [];
+	}
 
-		if (!Utils.isArray(aDisabled))
+	for (iIndex = 0, iLen = aHeaderLines.length; iIndex < iLen; iIndex++)
+	{
+		aResult.push({
+			id: aHeaderLines[iIndex][0],
+			name: aHeaderLines[iIndex][1],
+			system: false,
+			seporator: false,
+			disabled: false
+		});
+	}
+
+	bSep = true;
+	for (iIndex = 0, iLen = aSystem.length; iIndex < iLen; iIndex++)
+	{
+		oItem = aSystem[iIndex];
+		if (fVisibleCallback ? fVisibleCallback(oItem) : true)
 		{
-			aDisabled = [];
-		}
-
-		if (!Utils.isArray(aHeaderLines))
-		{
-			aHeaderLines = [];
-		}
-
-		for (iIndex = 0, iLen = aHeaderLines.length; iIndex < iLen; iIndex++)
-		{
-			aResult.push({
-				'id': aHeaderLines[iIndex][0],
-				'name': aHeaderLines[iIndex][1],
-				'system': false,
-				'seporator': false,
-				'disabled': false
-			});
-		}
-
-		bSep = true;
-		for (iIndex = 0, iLen = aSystem.length; iIndex < iLen; iIndex++)
-		{
-			oItem = aSystem[iIndex];
-			if (fVisibleCallback ? fVisibleCallback.call(null, oItem) : true)
+			if (bSep && 0 < aResult.length)
 			{
-				if (bSep && 0 < aResult.length)
-				{
-					aResult.push({
-						'id': '---',
-						'name': '---',
-						'system': false,
-						'seporator': true,
-						'disabled': true
-					});
-				}
-
-				bSep = false;
 				aResult.push({
-					'id': oItem.fullNameRaw,
-					'name': fRenameCallback ? fRenameCallback.call(null, oItem) : oItem.name(),
-					'system': true,
-					'seporator': false,
-					'disabled': !oItem.selectable || -1 < Utils.inArray(oItem.fullNameRaw, aDisabled) ||
-						(fDisableCallback ? fDisableCallback.call(null, oItem) : false)
+					id: '---',
+					name: '---',
+					system: false,
+					seporator: true,
+					disabled: true
 				});
 			}
+
+			bSep = false;
+			aResult.push({
+				id: oItem.fullNameRaw,
+				name: fRenameCallback ? fRenameCallback(oItem) : oItem.name(),
+				system: true,
+				seporator: false,
+				disabled: !oItem.selectable || -1 < inArray(oItem.fullNameRaw, aDisabled) ||
+					(fDisableCallback ? fDisableCallback(oItem) : false)
+			});
 		}
+	}
 
-		bSep = true;
-		for (iIndex = 0, iLen = aList.length; iIndex < iLen; iIndex++)
+	bSep = true;
+	for (iIndex = 0, iLen = aList.length; iIndex < iLen; iIndex++)
+	{
+		oItem = aList[iIndex];
+		// if (oItem.subScribed() || !oItem.existen || bBuildUnvisible)
+		if ((oItem.subScribed() || !oItem.existen || bBuildUnvisible) && (oItem.selectable || oItem.hasSubScribedSubfolders()))
 		{
-			oItem = aList[iIndex];
-//			if (oItem.subScribed() || !oItem.existen || bBuildUnvisible)
-			if ((oItem.subScribed() || !oItem.existen || bBuildUnvisible) && (oItem.selectable || oItem.hasSubScribedSubfolders()))
+			if (fVisibleCallback ? fVisibleCallback(oItem) : true)
 			{
-				if (fVisibleCallback ? fVisibleCallback.call(null, oItem) : true)
+				if (FolderType.User === oItem.type() || !bSystem || oItem.hasSubScribedSubfolders())
 				{
-					if (Enums.FolderType.User === oItem.type() || !bSystem || oItem.hasSubScribedSubfolders())
+					if (bSep && 0 < aResult.length)
 					{
-						if (bSep && 0 < aResult.length)
-						{
-							aResult.push({
-								'id': '---',
-								'name': '---',
-								'system': false,
-								'seporator': true,
-								'disabled': true
-							});
-						}
-
-						bSep = false;
 						aResult.push({
-							'id': oItem.fullNameRaw,
-							'name': (new window.Array(oItem.deep + 1 - iUnDeep)).join(sDeepPrefix) +
-								(fRenameCallback ? fRenameCallback.call(null, oItem) : oItem.name()),
-							'system': false,
-							'seporator': false,
-							'disabled': !oItem.selectable || -1 < Utils.inArray(oItem.fullNameRaw, aDisabled) ||
-								(fDisableCallback ? fDisableCallback.call(null, oItem) : false)
+							id: '---',
+							name: '---',
+							system: false,
+							seporator: true,
+							disabled: true
 						});
 					}
-				}
-			}
 
-			if (oItem.subScribed() && 0 < oItem.subFolders().length)
-			{
-				aResult = aResult.concat(Utils.folderListOptionsBuilder([], oItem.subFolders(), aDisabled, [],
-					iUnDeep, fDisableCallback, fVisibleCallback, fRenameCallback, bSystem, bBuildUnvisible));
+					bSep = false;
+					aResult.push({
+						id: oItem.fullNameRaw,
+						name: (new window.Array(oItem.deep + 1 - iUnDeep)).join(sDeepPrefix) +
+							(fRenameCallback ? fRenameCallback(oItem) : oItem.name()),
+						system: false,
+						seporator: false,
+						disabled: !oItem.selectable || -1 < inArray(oItem.fullNameRaw, aDisabled) ||
+							(fDisableCallback ? fDisableCallback(oItem) : false)
+					});
+				}
 			}
 		}
 
-		return aResult;
-	};
+		if (oItem.subScribed() && 0 < oItem.subFolders().length)
+		{
+			aResult = aResult.concat(folderListOptionsBuilder([], oItem.subFolders(), aDisabled, [],
+				iUnDeep, fDisableCallback, fVisibleCallback, fRenameCallback, bSystem, bBuildUnvisible));
+		}
+	}
 
-	Utils.computedPagenatorHelper = function (koCurrentPage, koPageCount)
+	return aResult;
+}
+
+/**
+ * @param {object} element
+ * @returns {void}
+ */
+export function selectElement(element)
+{
+	let
+		sel = null,
+		range = null;
+
+	if (window.getSelection)
 	{
-		return function() {
-
-			var
-				iPrev = 0,
-				iNext = 0,
-				iLimit = 2,
-				aResult = [],
-				iCurrentPage = koCurrentPage(),
-				iPageCount = koPageCount(),
-
-				/**
-				 * @param {number} iIndex
-				 * @param {boolean=} bPush = true
-				 * @param {string=} sCustomName = ''
-				 */
-				fAdd = function (iIndex, bPush, sCustomName) {
-
-					var oData = {
-						'current': iIndex === iCurrentPage,
-						'name': Utils.isUnd(sCustomName) ? iIndex.toString() : sCustomName.toString(),
-						'custom': Utils.isUnd(sCustomName) ? false : true,
-						'title': Utils.isUnd(sCustomName) ? '' : iIndex.toString(),
-						'value': iIndex.toString()
-					};
-
-					if (Utils.isUnd(bPush) ? true : !!bPush)
-					{
-						aResult.push(oData);
-					}
-					else
-					{
-						aResult.unshift(oData);
-					}
-				}
-			;
-
-			if (1 < iPageCount || (0 < iPageCount && iPageCount < iCurrentPage))
-	//		if (0 < iPageCount && 0 < iCurrentPage)
-			{
-				if (iPageCount < iCurrentPage)
-				{
-					fAdd(iPageCount);
-					iPrev = iPageCount;
-					iNext = iPageCount;
-				}
-				else
-				{
-					if (3 >= iCurrentPage || iPageCount - 2 <= iCurrentPage)
-					{
-						iLimit += 2;
-					}
-
-					fAdd(iCurrentPage);
-					iPrev = iCurrentPage;
-					iNext = iCurrentPage;
-				}
-
-				while (0 < iLimit) {
-
-					iPrev -= 1;
-					iNext += 1;
-
-					if (0 < iPrev)
-					{
-						fAdd(iPrev, false);
-						iLimit--;
-					}
-
-					if (iPageCount >= iNext)
-					{
-						fAdd(iNext, true);
-						iLimit--;
-					}
-					else if (0 >= iPrev)
-					{
-						break;
-					}
-				}
-
-				if (3 === iPrev)
-				{
-					fAdd(2, false);
-				}
-				else if (3 < iPrev)
-				{
-					fAdd(window.Math.round((iPrev - 1) / 2), false, '...');
-				}
-
-				if (iPageCount - 2 === iNext)
-				{
-					fAdd(iPageCount - 1, true);
-				}
-				else if (iPageCount - 2 > iNext)
-				{
-					fAdd(window.Math.round((iPageCount + iNext) / 2), true, '...');
-				}
-
-				// first and last
-				if (1 < iPrev)
-				{
-					fAdd(1, false);
-				}
-
-				if (iPageCount > iNext)
-				{
-					fAdd(iPageCount, true);
-				}
-			}
-
-			return aResult;
-		};
-	};
-
-	Utils.selectElement = function (element)
+		sel = window.getSelection();
+		sel.removeAllRanges();
+		range = window.document.createRange();
+		range.selectNodeContents(element);
+		sel.addRange(range);
+	}
+	else if (window.document.selection)
 	{
-		var sel, range;
-		if (window.getSelection)
-		{
-			sel = window.getSelection();
-			sel.removeAllRanges();
-			range = window.document.createRange();
-			range.selectNodeContents(element);
-			sel.addRange(range);
-		}
-		else if (window.document.selection)
-		{
-			range = window.document.body.createTextRange();
-			range.moveToElementText(element);
-			range.select();
-		}
+		range = window.document.body.createTextRange();
+		range.moveToElementText(element);
+		range.select();
+	}
+}
+
+export const detectDropdownVisibility = _.debounce(() => {
+	dropdownVisibility(!!_.find(GlobalsData.aBootstrapDropdowns, (item) => item.hasClass('open')));
+}, 50);
+
+/**
+ * @param {boolean=} delay = false
+ */
+export function triggerAutocompleteInputChange(delay = false) {
+
+	const fFunc = () => {
+		$('.checkAutocomplete').trigger('change');
 	};
 
-	Utils.detectDropdownVisibility = _.debounce(function () {
-		Globals.dropdownVisibility(!!_.find(Globals.aBootstrapDropdowns, function (oItem) {
-			return oItem.hasClass('open');
-		}));
-	}, 50);
+	if (delay)
+	{
+		_.delay(fFunc, 100);
+	}
+	else
+	{
+		fFunc();
+	}
+}
 
-	/**
-	 * @param {boolean=} bDelay = false
-	 */
-	Utils.triggerAutocompleteInputChange = function (bDelay) {
+const configurationScriptTagCache = {};
 
-		var fFunc = function () {
-			$('.checkAutocomplete').trigger('change');
-		};
+/**
+ * @param {string} configuration
+ * @returns {object}
+ */
+export function getConfigurationFromScriptTag(configuration)
+{
+	if (!configurationScriptTagCache[configuration])
+	{
+		configurationScriptTagCache[configuration] = $('script[type="application/json"][data-configuration="' + configuration + '"]');
+	}
 
-		if (Utils.isUnd(bDelay) ? false : !!bDelay)
+	try
+	{
+		return JSON.parse(configurationScriptTagCache[configuration].text());
+	}
+	catch (e) {} // eslint-disable-line no-empty
+
+	return {};
+}
+
+/**
+ * @param {mixed} mPropOrValue
+ * @param {mixed} value
+ */
+export function disposeOne(propOrValue, value)
+{
+	const disposable = value || propOrValue;
+	if (disposable && 'function' === typeof disposable.dispose)
+	{
+		disposable.dispose();
+	}
+}
+
+/**
+ * @param {Object} object
+ */
+export function disposeObject(object)
+{
+	if (object)
+	{
+		if (isArray(object.disposables))
 		{
-			_.delay(fFunc, 100);
+			_.each(object.disposables, disposeOne);
+		}
+
+		ko.utils.objectForEach(object, disposeOne);
+	}
+}
+
+/**
+ * @param {Object|Array} objectOrObjects
+ * @returns {void}
+ */
+export function delegateRunOnDestroy(objectOrObjects)
+{
+	if (objectOrObjects)
+	{
+		if (isArray(objectOrObjects))
+		{
+			_.each(objectOrObjects, (item) => {
+				delegateRunOnDestroy(item);
+			});
+		}
+		else if (objectOrObjects && objectOrObjects.onDestroy)
+		{
+			objectOrObjects.onDestroy();
+		}
+	}
+}
+
+/**
+ * @param {object} $styleTag
+ * @param {string} css
+ * @returns {boolean}
+ */
+export function appendStyles($styleTag, css)
+{
+	if ($styleTag && $styleTag[0])
+	{
+		if ($styleTag[0].styleSheet && !isUnd($styleTag[0].styleSheet.cssText))
+		{
+			$styleTag[0].styleSheet.cssText = css;
 		}
 		else
 		{
-			fFunc();
-		}
-	};
-
-	/**
-	 * @param {Object} oParams
-	 */
-	Utils.setHeadViewport = function (oParams)
-	{
-		var aContent = [];
-		_.each(oParams, function (sKey, sValue) {
-			aContent.push('' + sKey + '=' + sValue);
-		});
-
-		$('#rl-head-viewport').attr('content', aContent.join(', '));
-	};
-
-	/**
-	 * @param {string} sFileName
-	 * @return {string}
-	 */
-	Utils.getFileExtension = function (sFileName)
-	{
-		sFileName = Utils.trim(sFileName).toLowerCase();
-
-		var sResult = sFileName.split('.').pop();
-		return (sResult === sFileName) ? '' : sResult;
-	};
-
-	/**
-	 * @param {string} sFileName
-	 * @return {string}
-	 */
-	Utils.mimeContentType = function (sFileName)
-	{
-		var
-			sExt = '',
-			sResult = 'application/octet-stream'
-		;
-
-		sFileName = Utils.trim(sFileName).toLowerCase();
-
-		if ('winmail.dat' === sFileName)
-		{
-			return 'application/ms-tnef';
+			$styleTag.text(css);
 		}
 
-		sExt = Utils.getFileExtension(sFileName);
-		if (sExt && 0 < sExt.length && !Utils.isUnd(Mime[sExt]))
+		return true;
+	}
+
+	return false;
+}
+
+let
+	__themeTimer = 0,
+	__themeAjax = null;
+
+/**
+ * @param {string} value
+ * @param {function=} themeTrigger = noop
+ * @returns {void}
+ */
+export function changeTheme(value, themeTrigger = noop)
+{
+	const
+		themeLink = $('#app-theme-link'),
+		clearTimer = () => {
+			__themeTimer = window.setTimeout(() => themeTrigger(SaveSettingsStep.Idle), 1000);
+			__themeAjax = null;
+		};
+
+	let
+		themeStyle = $('#app-theme-style'),
+		url = themeLink.attr('href');
+
+	if (!url)
+	{
+		url = themeStyle.attr('data-href');
+	}
+
+	if (url)
+	{
+		url = url.toString().replace(/\/-\/[^\/]+\/\-\//, '/-/' + value + '/-/');
+		url = url.replace(/\/Css\/[^\/]+\/User\//, '/Css/0/User/');
+		url = url.replace(/\/Hash\/[^\/]+\//, '/Hash/-/');
+
+		if ('Json/' !== url.substring(url.length - 5, url.length))
 		{
-			sResult = Mime[sExt];
+			url += 'Json/';
 		}
 
-		return sResult;
-	};
+		window.clearTimeout(__themeTimer);
 
-	/**
-	 * @param {mixed} mPropOrValue
-	 * @param {mixed} mValue
-	 */
-	Utils.disposeOne = function (mPropOrValue, mValue)
-	{
-		var mDisposable = mValue || mPropOrValue;
-        if (mDisposable && typeof mDisposable.dispose === 'function')
-		{
-            mDisposable.dispose();
-        }
-	};
+		themeTrigger(SaveSettingsStep.Animate);
 
-	/**
-	 * @param {Object} oObject
-	 */
-	Utils.disposeObject = function (oObject)
-	{
-		if (oObject)
+		if (__themeAjax && __themeAjax.abort)
 		{
-			if (Utils.isArray(oObject.disposables))
+			__themeAjax.abort();
+		}
+
+		__themeAjax = $.ajax({
+			url: url,
+			dataType: 'json'
+		}).then((data) => {
+
+			if (data && isArray(data) && 2 === data.length)
 			{
-				_.each(oObject.disposables, Utils.disposeOne);
-			}
-
-			ko.utils.objectForEach(oObject, Utils.disposeOne);
-		}
-	};
-
-	/**
-	 * @param {Object|Array} mObjectOrObjects
-	 */
-	Utils.delegateRunOnDestroy = function (mObjectOrObjects)
-	{
-		if (mObjectOrObjects)
-		{
-			if (Utils.isArray(mObjectOrObjects))
-			{
-				_.each(mObjectOrObjects, function (oItem) {
-					Utils.delegateRunOnDestroy(oItem);
-				});
-			}
-			else if (mObjectOrObjects && mObjectOrObjects.onDestroy)
-			{
-				mObjectOrObjects.onDestroy();
-			}
-		}
-	};
-
-	Utils.__themeTimer = 0;
-	Utils.__themeAjax = null;
-
-	Utils.changeTheme = function (sValue, themeTrigger)
-	{
-		var
-			oThemeLink = $('#rlThemeLink'),
-			oThemeStyle = $('#rlThemeStyle'),
-			sUrl = oThemeLink.attr('href')
-		;
-
-		if (!sUrl)
-		{
-			sUrl = oThemeStyle.attr('data-href');
-		}
-
-		if (sUrl)
-		{
-			sUrl = sUrl.toString().replace(/\/-\/[^\/]+\/\-\//, '/-/' + sValue + '/-/');
-			sUrl = sUrl.toString().replace(/\/Css\/[^\/]+\/User\//, '/Css/0/User/');
-			sUrl = sUrl.toString().replace(/\/Hash\/[^\/]+\//, '/Hash/-/');
-
-			if ('Json/' !== sUrl.substring(sUrl.length - 5, sUrl.length))
-			{
-				sUrl += 'Json/';
-			}
-
-			window.clearTimeout(Utils.__themeTimer);
-			themeTrigger(Enums.SaveSettingsStep.Animate);
-
-			if (Utils.__themeAjax && Utils.__themeAjax.abort)
-			{
-				Utils.__themeAjax.abort();
-			}
-
-			Utils.__themeAjax = $.ajax({
-				'url': sUrl,
-				'dataType': 'json'
-			}).done(function(aData) {
-
-				if (aData && Utils.isArray(aData) && 2 === aData.length)
+				if (themeLink && themeLink[0] && (!themeStyle || !themeStyle[0]))
 				{
-					if (oThemeLink && oThemeLink[0] && (!oThemeStyle || !oThemeStyle[0]))
-					{
-						oThemeStyle = $('<style id="rlThemeStyle"></style>');
-						oThemeLink.after(oThemeStyle);
-						oThemeLink.remove();
-					}
-
-					if (oThemeStyle && oThemeStyle[0])
-					{
-						oThemeStyle.attr('data-href', sUrl).attr('data-theme', aData[0]);
-						if (oThemeStyle[0].styleSheet && !Utils.isUnd(oThemeStyle[0].styleSheet.cssText))
-						{
-							oThemeStyle[0].styleSheet.cssText = aData[1];
-						}
-						else
-						{
-							oThemeStyle.text(aData[1]);
-						}
-					}
-
-					themeTrigger(Enums.SaveSettingsStep.TrueResult);
+					themeStyle = $('<style id="app-theme-style"></style>');
+					themeLink.after(themeStyle);
+					themeLink.remove();
 				}
 
-			}).always(function() {
+				if (themeStyle && themeStyle[0])
+				{
+					if (appendStyles(themeStyle, data[1]))
+					{
+						themeStyle.attr('data-href', url).attr('data-theme', data[0]);
+					}
+				}
 
-				Utils.__themeTimer = window.setTimeout(function () {
-					themeTrigger(Enums.SaveSettingsStep.Idle);
-				}, 1000);
+				themeTrigger(SaveSettingsStep.TrueResult);
+			}
 
-				Utils.__themeAjax = null;
-			});
+		}).then(clearTimer, clearTimer);
+	}
+}
+
+/**
+ * @returns {function}
+ */
+export function computedPagenatorHelper(koCurrentPage, koPageCount)
+{
+	return () => {
+
+		const
+			currentPage = koCurrentPage(),
+			pageCount = koPageCount(),
+			result = [],
+			fAdd = (index, push = true, customName = '') => {
+
+				const data = {
+					current: index === currentPage,
+					name: '' === customName ? index.toString() : customName.toString(),
+					custom: '' !== customName,
+					title: '' === customName ? '' : index.toString(),
+					value: index.toString()
+				};
+
+				if (push)
+				{
+					result.push(data);
+				}
+				else
+				{
+					result.unshift(data);
+				}
+			};
+
+		let
+			prev = 0,
+			next = 0,
+			limit = 2;
+
+		if (1 < pageCount || (0 < pageCount && pageCount < currentPage))
+		{
+			if (pageCount < currentPage)
+			{
+				fAdd(pageCount);
+				prev = pageCount;
+				next = pageCount;
+			}
+			else
+			{
+				if (3 >= currentPage || pageCount - 2 <= currentPage)
+				{
+					limit += 2;
+				}
+
+				fAdd(currentPage);
+				prev = currentPage;
+				next = currentPage;
+			}
+
+			while (0 < limit) {
+
+				prev -= 1;
+				next += 1;
+
+				if (0 < prev)
+				{
+					fAdd(prev, false);
+					limit -= 1;
+				}
+
+				if (pageCount >= next)
+				{
+					fAdd(next, true);
+					limit -= 1;
+				}
+				else if (0 >= prev)
+				{
+					break;
+				}
+			}
+
+			if (3 === prev)
+			{
+				fAdd(2, false);
+			}
+			else if (3 < prev)
+			{
+				fAdd(Math.round((prev - 1) / 2), false, '...');
+			}
+
+			if (pageCount - 2 === next)
+			{
+				fAdd(pageCount - 1, true);
+			}
+			else if (pageCount - 2 > next)
+			{
+				fAdd(Math.round((pageCount + next) / 2), true, '...');
+			}
+
+			// first and last
+			if (1 < prev)
+			{
+				fAdd(1, false);
+			}
+
+			if (pageCount > next)
+			{
+				fAdd(pageCount, true);
+			}
 		}
+
+		return result;
+	};
+}
+
+/**
+ * @param {string} fileName
+ * @returns {string}
+ */
+export function getFileExtension(fileName)
+{
+	fileName = trim(fileName).toLowerCase();
+
+	const result = fileName.split('.').pop();
+	return result === fileName ? '' : result;
+}
+
+/**
+ * @param {string} fileName
+ * @returns {string}
+ */
+export function mimeContentType(fileName)
+{
+	let
+		ext = '',
+		result = 'application/octet-stream';
+
+	fileName = trim(fileName).toLowerCase();
+
+	if ('winmail.dat' === fileName)
+	{
+		return 'application/ms-tnef';
+	}
+
+	ext = getFileExtension(fileName);
+	if (ext && 0 < ext.length && !isUnd(Mime[ext]))
+	{
+		result = Mime[ext];
+	}
+
+	return result;
+}
+
+/**
+ * @param {string} color
+ * @returns {boolean}
+ */
+export function isTransparent(color)
+{
+	return 'rgba(0, 0, 0, 0)' === color || 'transparent' === color;
+}
+
+/**
+ * @param {Object} $el
+ * @returns {number}
+ */
+export function getRealHeight($el)
+{
+	$el.clone().show().appendTo($hcont);
+	const result = $hcont.height();
+	$hcont.empty();
+	return result;
+}
+
+/**
+ * @param {string} url
+ * @param {number} value
+ * @param {Function} fCallback
+ */
+export function resizeAndCrop(url, value, fCallback)
+{
+	const img = new window.Image();
+	img.onload = function() {
+
+		let
+			diff = [0, 0];
+
+		const
+			canvas = window.document.createElement('canvas'),
+			ctx = canvas.getContext('2d');
+
+		canvas.width = value;
+		canvas.height = value;
+
+		if (this.width > this.height)
+		{
+			diff = [this.width - this.height, 0];
+		}
+		else
+		{
+			diff = [0, this.height - this.width];
+		}
+
+		ctx.fillStyle = '#fff';
+		ctx.fillRect(0, 0, value, value);
+		ctx.drawImage(this, diff[0] / 2, diff[1] / 2, this.width - diff[0], this.height - diff[1], 0, 0, value, value);
+
+		fCallback(canvas.toDataURL('image/jpeg'));
 	};
 
-	module.exports = Utils;
+	img.src = url;
+}
 
-}());
+/**
+ * @param {string} mailToUrl
+ * @param {Function} PopupComposeViewModel
+ * @returns {boolean}
+ */
+export function mailToHelper(mailToUrl, PopupComposeViewModel)
+{
+	if (mailToUrl && 'mailto:' === mailToUrl.toString().substr(0, 7).toLowerCase())
+	{
+		if (!PopupComposeViewModel)
+		{
+			return true;
+		}
+
+		mailToUrl = mailToUrl.toString().substr(7);
+
+		let
+			to = [],
+			cc = null,
+			bcc = null,
+			params = {};
+
+		const
+			email = mailToUrl.replace(/\?.+$/, ''),
+			query = mailToUrl.replace(/^[^\?]*\?/, ''),
+			EmailModel = require('Model/Email').default;
+
+		params = simpleQueryParser(query);
+
+		if (!isUnd(params.to))
+		{
+			to = EmailModel.parseEmailLine(decodeURIComponent(email + ',' + params.to));
+			to = _.values(to.reduce((result, value) => {
+				if (value)
+				{
+					if (result[value.email])
+					{
+						if (!result[value.email].name)
+						{
+							result[value.email] = value;
+						}
+					}
+					else
+					{
+						result[value.email] = value;
+					}
+				}
+				return result;
+			}, {}));
+		}
+		else
+		{
+			to = EmailModel.parseEmailLine(email);
+		}
+
+		if (!isUnd(params.cc))
+		{
+			cc = EmailModel.parseEmailLine(decodeURIComponent(params.cc));
+		}
+
+		if (!isUnd(params.bcc))
+		{
+			bcc = EmailModel.parseEmailLine(decodeURIComponent(params.bcc));
+		}
+
+		require('Knoin/Knoin').showScreenPopup(PopupComposeViewModel, [
+			ComposeType.Empty, null, to, cc, bcc,
+			isUnd(params.subject) ? null : pString(decodeURIComponent(params.subject)),
+			isUnd(params.body) ? null : plainToHtml(pString(decodeURIComponent(params.body)))
+		]);
+
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * @param {Function} fn
+ * @returns {void}
+ */
+export function domReady(fn)
+{
+	$(() => fn());
+//
+//	if ('loading' !== window.document.readyState)
+//	{
+//		fn();
+//	}
+//	else
+//	{
+//		window.document.addEventListener('DOMContentLoaded', fn);
+//	}
+}
+
+export const windowResize = _.debounce((timeout) => {
+	if (isUnd(timeout) || isNull(timeout))
+	{
+		$win.resize();
+	}
+	else
+	{
+		window.setTimeout(() => {
+			$win.resize();
+		}, timeout);
+	}
+}, 50);
+
+/**
+ * @returns {void}
+ */
+export function windowResizeCallback()
+{
+	windowResize();
+}
+
+let substr = window.String.substr;
+if ('b' !== 'ab'.substr(-1))
+{
+	substr = (str, start, length) => {
+		start = 0 > start ? str.length + start : start;
+		return str.substr(start, length);
+	};
+
+	window.String.substr = substr;
+}

@@ -1,29 +1,7 @@
 
-(function () {
+import {componentExportHelper} from 'Component/Abstract';
+import {AbstracRadio} from 'Component/AbstracRadio';
 
-	'use strict';
+class RadioComponent extends AbstracRadio {}
 
-	var
-		_ = require('_'),
-
-		AbstracRadio = require('Component/AbstracRadio')
-	;
-
-	/**
-	 * @constructor
-	 *
-	 * @param {Object} oParams
-	 *
-	 * @extends AbstracRadio
-	 */
-	function RadioComponent(oParams)
-	{
-		AbstracRadio.call(this, oParams);
-	}
-
-	_.extend(RadioComponent.prototype, AbstracRadio.prototype);
-
-	module.exports = AbstracRadio.componentExportHelper(
-		RadioComponent, 'RadioComponent');
-
-}());
+export default componentExportHelper(RadioComponent, 'RadioComponent');

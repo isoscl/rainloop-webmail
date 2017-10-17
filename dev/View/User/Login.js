@@ -1,40 +1,54 @@
 
-(function () {
+import window from 'window';
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {
+	LoginSignMeType,
+	LoginSignMeTypeAsString,
+	ClientSideKeyName,
+	StorageResultType,
+	Magics,
+	Notification
+} from 'Common/Enums';
 
-	var
-		window = require('window'),
-		_ = require('_'),
-		$ = require('$'),
-		ko = require('ko'),
+import {
+	trim, inArray, pInt,
+	convertLangName, triggerAutocompleteInputChange
+} from 'Common/Utils';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Links = require('Common/Links'),
+import {$win} from 'Common/Globals';
+import {socialFacebook, socialGoogle, socialTwitter} from 'Common/Links';
+import {getNotification, getNotificationFromResponse, reload as translatorReload} from 'Common/Translator';
 
-		Translator = require('Common/Translator'),
+import * as Plugins from 'Common/Plugins';
 
-		Plugins = require('Common/Plugins'),
+import AppStore from 'Stores/User/App';
+import LanguageStore from 'Stores/Language';
 
-		LanguageStore = require('Stores/Language'),
-		AppStore = require('Stores/User/App'),
+import * as Settings from 'Storage/Settings';
+import * as Local from 'Storage/Client';
 
-		Local = require('Storage/Client'),
-		Settings = require('Storage/Settings'),
-		Remote = require('Storage/User/Remote'),
+import Remote from 'Remote/User/Ajax';
 
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
+import {getApp} from 'Helper/Apps/User';
 
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function LoginUserView()
-	{
-		AbstractView.call(this, 'Center', 'Login');
+import {view, command, ViewType, routeOff, showScreenPopup} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
+
+@view({
+	name: ['View/App/Login', 'View/User/Login'],
+	type: ViewType.Center,
+	templateID: 'Login'
+})
+class LoginUserView extends AbstractViewNext
+{
+	constructor() {
+		super();
+
+		this.hideSubmitButton = !!Settings.appSettingsGet('hideSubmitButton');
+
+		this.welcome = ko.observable(!!Settings.settingsGet('UseLoginWelcomePage'));
 
 		this.email = ko.observable('');
 		this.password = ko.observable('');
@@ -42,121 +56,220 @@
 
 		this.additionalCode = ko.observable('');
 		this.additionalCode.error = ko.observable(false);
+		this.additionalCode.errorAnimation = ko.observable(false).extend({falseTimeout: 500});
 		this.additionalCode.focused = ko.observable(false);
 		this.additionalCode.visibility = ko.observable(false);
 		this.additionalCodeSignMe = ko.observable(false);
 
-		this.logoImg = Utils.trim(Settings.settingsGet('LoginLogo'));
-		this.logoPowered = !!Settings.settingsGet('LoginPowered');
-		this.loginDescription = Utils.trim(Settings.settingsGet('LoginDescription'));
+		this.logoImg = trim(Settings.settingsGet('LoginLogo'));
+		this.loginPowered = !!Settings.settingsGet('LoginPowered');
+		this.loginDescription = trim(Settings.settingsGet('LoginDescription'));
 
-		this.forgotPasswordLinkUrl = Settings.settingsGet('ForgotPasswordLinkUrl');
-		this.registrationLinkUrl = Settings.settingsGet('RegistrationLinkUrl');
+		this.mobile = !!Settings.appSettingsGet('mobile');
+		this.mobileDevice = !!Settings.appSettingsGet('mobileDevice');
+
+		this.forgotPasswordLinkUrl = Settings.appSettingsGet('forgotPasswordLinkUrl');
+		this.registrationLinkUrl = Settings.appSettingsGet('registrationLinkUrl');
 
 		this.emailError = ko.observable(false);
 		this.passwordError = ko.observable(false);
 
-		this.emailFocus = ko.observable(false);
-		this.submitFocus = ko.observable(false);
+		this.emailErrorAnimation = ko.observable(false).extend({falseTimeout: 500});
+		this.passwordErrorAnimation = ko.observable(false).extend({falseTimeout: 500});
 
-		this.email.subscribe(function () {
+		this.formHidden = ko.observable(false);
+
+		this.formError = ko.computed(
+			() => this.emailErrorAnimation() || this.passwordErrorAnimation() ||
+				(this.additionalCode.visibility() && this.additionalCode.errorAnimation())
+		);
+
+		this.emailFocus = ko.observable(false);
+		this.passwordFocus = ko.observable(false);
+
+		this.email.subscribe(() => {
 			this.emailError(false);
 			this.additionalCode('');
 			this.additionalCode.visibility(false);
-		}, this);
+		});
 
-		this.password.subscribe(function () {
+		this.password.subscribe(() => {
 			this.passwordError(false);
-		}, this);
+		});
 
-		this.additionalCode.subscribe(function () {
+		this.additionalCode.subscribe(() => {
 			this.additionalCode.error(false);
-		}, this);
+		});
 
-		this.additionalCode.visibility.subscribe(function () {
+		this.additionalCode.visibility.subscribe(() => {
 			this.additionalCode.error(false);
-		}, this);
+		});
+
+		this.emailError.subscribe((bV) => {
+			this.emailErrorAnimation(!!bV);
+		});
+
+		this.passwordError.subscribe((bV) => {
+			this.passwordErrorAnimation(!!bV);
+		});
+
+		this.additionalCode.error.subscribe((bV) => {
+			this.additionalCode.errorAnimation(!!bV);
+		});
 
 		this.submitRequest = ko.observable(false);
 		this.submitError = ko.observable('');
 		this.submitErrorAddidional = ko.observable('');
 
-		this.submitError.subscribe(function (sValue) {
-			if ('' === sValue)
+		this.submitError.subscribe((value) => {
+			if ('' === value)
 			{
 				this.submitErrorAddidional('');
 			}
-		}, this);
+		});
 
 		this.allowLanguagesOnLogin = AppStore.allowLanguagesOnLogin;
 
 		this.langRequest = ko.observable(false);
 		this.language = LanguageStore.language;
+		this.languages = LanguageStore.languages;
 
 		this.bSendLanguage = false;
 
-		this.languageFullName = ko.computed(function () {
-			return Utils.convertLangName(this.language());
-		}, this);
+		this.languageFullName = ko.computed(
+			() => convertLangName(this.language())
+		);
 
-		this.signMeType = ko.observable(Enums.LoginSignMeType.Unused);
+		this.signMeType = ko.observable(LoginSignMeType.Unused);
 
-		this.signMeType.subscribe(function (iValue) {
-			this.signMe(Enums.LoginSignMeType.DefaultOn === iValue);
-		}, this);
+		this.signMeType.subscribe((iValue) => {
+			this.signMe(LoginSignMeType.DefaultOn === iValue);
+		});
 
-		this.signMeVisibility = ko.computed(function () {
-			return Enums.LoginSignMeType.Unused !== this.signMeType();
-		}, this);
+		this.signMeVisibility = ko.computed(
+			() => LoginSignMeType.Unused !== this.signMeType()
+		);
 
-		this.submitCommand = Utils.createCommand(this, function () {
+		this.facebookLoginEnabled = ko.observable(false);
+		this.googleLoginEnabled = ko.observable(false);
+		this.googleFastLoginEnabled = ko.observable(false);
+		this.twitterLoginEnabled = ko.observable(false);
 
-			Utils.triggerAutocompleteInputChange();
+		this.socialLoginEnabled = ko.computed(() => {
+			const
+				bF = this.facebookLoginEnabled(),
+				bG = this.googleLoginEnabled(),
+				bT = this.twitterLoginEnabled();
 
-			this.emailError('' === Utils.trim(this.email()));
-			this.passwordError('' === Utils.trim(this.password()));
+			return bF || bG || bT;
+		});
 
-			if (this.additionalCode.visibility())
+		if (Settings.settingsGet('AdditionalLoginError') && !this.submitError())
+		{
+			this.submitError(Settings.settingsGet('AdditionalLoginError'));
+		}
+	}
+
+	windowOpenFeatures(wh) {
+		return `left=200,top=100,width=${wh},height=${wh},menubar=no,status=no,resizable=yes,scrollbars=yes`;
+	}
+
+	@command((self) => !self.submitRequest() && self.facebookLoginEnabled())
+	facebookCommand() {
+		window.open(socialFacebook(), 'Facebook', this.windowOpenFeatures(500));
+		return true;
+	}
+
+	@command((self) => !self.submitRequest() && self.googleLoginEnabled())
+	googleCommand() {
+		window.open(socialGoogle(), 'Google', this.windowOpenFeatures(550));
+		return true;
+	}
+
+	@command((self) => !self.submitRequest() && self.googleFastLoginEnabled())
+	googleFastCommand() {
+		window.open(socialGoogle(true), 'Google', this.windowOpenFeatures(550));
+		return true;
+	}
+
+	@command((self) => !self.submitRequest() && self.twitterLoginEnabled())
+	twitterCommand() {
+		window.open(socialTwitter(), 'Twitter', this.windowOpenFeatures(500));
+		return true;
+	}
+
+	@command((self) => !self.submitRequest())
+	submitCommand() {
+
+		triggerAutocompleteInputChange();
+
+		this.emailError(false);
+		this.passwordError(false);
+
+		this.emailError('' === trim(this.email()));
+		this.passwordError('' === trim(this.password()));
+
+		if (this.additionalCode.visibility())
+		{
+			this.additionalCode.error(false);
+			this.additionalCode.error('' === trim(this.additionalCode()));
+		}
+
+		if (this.emailError() || this.passwordError() ||
+			(this.additionalCode.visibility() && this.additionalCode.error()))
+		{
+			switch (true)
 			{
-				this.additionalCode.error('' === Utils.trim(this.additionalCode()));
+				case this.emailError():
+					this.emailFocus(true);
+					break;
+				case this.passwordError():
+					this.passwordFocus(true);
+					break;
+				case this.additionalCode.visibility() && this.additionalCode.error():
+					this.additionalCode.focused(true);
+					break;
+				// no default
 			}
 
-			if (this.emailError() || this.passwordError() || this.additionalCode.error())
-			{
-				return false;
-			}
+			return false;
+		}
 
-			var
-				iPluginResultCode = 0,
-				sPluginResultMessage = '',
-				fSubmitResult = function (iResultCode, sResultMessage) {
-					iPluginResultCode = iResultCode || 0;
-					sPluginResultMessage = sResultMessage || '';
-				}
-			;
+		let
+			pluginResultCode = 0,
+			pluginResultMessage = '';
 
-			Plugins.runHook('user-login-submit', [fSubmitResult]);
-			if (0 < iPluginResultCode)
-			{
-				this.submitError(Translator.getNotification(iPluginResultCode));
-				return false;
-			}
-			else if ('' !== sPluginResultMessage)
-			{
-				this.submitError(sPluginResultMessage);
-				return false;
-			}
+		const
+			fSubmitResult = (iResultCode, sResultMessage) => {
+				pluginResultCode = iResultCode || 0;
+				pluginResultMessage = sResultMessage || '';
+			};
 
-			this.submitRequest(true);
+		Plugins.runHook('user-login-submit', [fSubmitResult]);
+		if (0 < pluginResultCode)
+		{
+			this.submitError(getNotification(pluginResultCode));
+			return false;
+		}
+		else if ('' !== pluginResultMessage)
+		{
+			this.submitError(pluginResultMessage);
+			return false;
+		}
 
-			var
-				sPassword = this.password(),
+		this.submitRequest(true);
+		$win.trigger('rl.tooltips.diactivate');
 
-				fLoginRequest = _.bind(function (sPassword) {
+		const
+			fLoginRequest = (sLoginPassword) => {
 
-					Remote.login(_.bind(function (sResult, oData) {
+				Remote.login(
+					(sResult, oData) => {
 
-						if (Enums.StorageResultType.Success === sResult && oData && 'Login' === oData.Action)
+						$win.trigger('rl.tooltips.diactivate');
+						$win.trigger('rl.tooltips.activate');
+
+						if (StorageResultType.Success === sResult && oData && 'Login' === oData.Action)
 						{
 							if (oData.Result)
 							{
@@ -164,39 +277,36 @@
 								{
 									this.additionalCode('');
 									this.additionalCode.visibility(true);
-									this.additionalCode.focused(true);
-
 									this.submitRequest(false);
+
+									_.delay(() => this.additionalCode.focused(true), Magics.Time100ms);
 								}
 								else if (oData.Admin)
 								{
-									require('App/User').redirectToAdminPanel();
+									getApp().redirectToAdminPanel();
 								}
 								else
 								{
-									require('App/User').loginAndLogoutReload();
+									getApp().loginAndLogoutReload(false);
 								}
 							}
 							else if (oData.ErrorCode)
 							{
 								this.submitRequest(false);
-								if (-1 < Utils.inArray(oData.ErrorCode, [Enums.Notification.InvalidInputArgument]))
+								if (-1 < inArray(oData.ErrorCode, [Notification.InvalidInputArgument]))
 								{
-									oData.ErrorCode = Enums.Notification.AuthError;
+									oData.ErrorCode = Notification.AuthError;
 								}
 
-								this.submitError(Translator.getNotification(oData.ErrorCode));
+								this.submitError(getNotificationFromResponse(oData));
 
 								if ('' === this.submitError())
 								{
-									this.submitError(Translator.getNotification(Enums.Notification.UnknownError));
+									this.submitError(getNotification(Notification.UnknownError));
 								}
-								else
+								else if (oData.ErrorMessageAdditional)
 								{
-									if (oData.ErrorMessageAdditional)
-									{
-										this.submitErrorAddidional(oData.ErrorMessageAdditional);
-									}
+									this.submitErrorAddidional(oData.ErrorMessageAdditional);
 								}
 							}
 							else
@@ -207,218 +317,169 @@
 						else
 						{
 							this.submitRequest(false);
-							this.submitError(Translator.getNotification(Enums.Notification.UnknownError));
+							this.submitError(getNotification(Notification.UnknownError));
 						}
 
-					}, this), this.email(), '', sPassword, !!this.signMe(),
-						this.bSendLanguage ? this.language() : '',
-						this.additionalCode.visibility() ? this.additionalCode() : '',
-						this.additionalCode.visibility() ? !!this.additionalCodeSignMe() : false
-					);
+					},
+					this.email(),
+					'',
+					sLoginPassword,
+					!!this.signMe(),
+					this.bSendLanguage ? this.language() : '',
+					this.additionalCode.visibility() ? this.additionalCode() : '',
+					this.additionalCode.visibility() ? !!this.additionalCodeSignMe() : false
+				);
 
-					Local.set(Enums.ClientSideKeyName.LastSignMe, !!this.signMe() ? '-1-' : '-0-');
+				Local.set(ClientSideKeyName.LastSignMe, this.signMe() ? '-1-' : '-0-');
 
-				}, this)
-			;
+			};
 
-			if (!!Settings.settingsGet('UseRsaEncryption') && Utils.rsaEncode.supported &&
-				Settings.settingsGet('RsaPublicKey'))
-			{
-				fLoginRequest(Utils.rsaEncode(sPassword, Settings.settingsGet('RsaPublicKey')));
-			}
-			else
-			{
-				fLoginRequest(sPassword);
-			}
+		fLoginRequest(this.password());
 
-			return true;
-
-		}, function () {
-			return !this.submitRequest();
-		});
-
-		this.facebookLoginEnabled = ko.observable(false);
-
-		this.facebookCommand = Utils.createCommand(this, function () {
-
-			window.open(Links.socialFacebook(), 'Facebook',
-				'left=200,top=100,width=650,height=450,menubar=no,status=no,resizable=yes,scrollbars=yes');
-
-			return true;
-
-		}, function () {
-			return !this.submitRequest() && this.facebookLoginEnabled();
-		});
-
-		this.googleLoginEnabled = ko.observable(false);
-
-		this.googleCommand = Utils.createCommand(this, function () {
-
-			window.open(Links.socialGoogle(), 'Google',
-				'left=200,top=100,width=650,height=450,menubar=no,status=no,resizable=yes,scrollbars=yes');
-
-			return true;
-
-		}, function () {
-			return !this.submitRequest() && this.googleLoginEnabled();
-		});
-
-		this.twitterLoginEnabled = ko.observable(false);
-
-		this.twitterCommand = Utils.createCommand(this, function () {
-
-			window.open(Links.socialTwitter(), 'Twitter',
-				'left=200,top=100,width=650,height=450,menubar=no,status=no,resizable=yes,scrollbars=yes');
-
-			return true;
-
-		}, function () {
-			return !this.submitRequest() && this.twitterLoginEnabled();
-		});
-
-		this.socialLoginEnabled = ko.computed(function () {
-
-			var
-				bF = this.facebookLoginEnabled(),
-				bG = this.googleLoginEnabled(),
-				bT = this.twitterLoginEnabled()
-			;
-
-			return bF || bG || bT;
-		}, this);
-
-		kn.constructorEnd(this);
+		return true;
 	}
 
-	kn.extendAsViewModel(['View/User/Login', 'View/App/Login', 'LoginViewModel'], LoginUserView);
-	_.extend(LoginUserView.prototype, AbstractView.prototype);
+	displayMainForm() {
+		this.welcome(false);
+	}
 
-	LoginUserView.prototype.onShow = function ()
-	{
-		kn.routeOff();
+	onShow() {
+		routeOff();
+	}
 
-		_.delay(_.bind(function () {
-			if ('' !== this.email() && '' !== this.password())
-			{
-				this.submitFocus(true);
-			}
-			else
-			{
-				this.emailFocus(true);
-			}
+	onShowWithDelay() {
+		if ('' !== this.email() && '' !== this.password())
+		{
+			this.passwordFocus(true);
+		}
+		else if ('' === this.email())
+		{
+			this.emailFocus(true);
+		}
+		else if ('' === this.password())
+		{
+			this.passwordFocus(true);
+		}
+		else
+		{
+			this.emailFocus(true);
+		}
+	}
 
-			if (Settings.settingsGet('UserLanguage'))
-			{
-				$.cookie('rllang', LanguageStore.language(), {'expires': 30});
-			}
-
-		}, this), 100);
-	};
-
-	LoginUserView.prototype.onHide = function ()
-	{
-		this.submitFocus(false);
+	onHide() {
 		this.emailFocus(false);
-	};
+		this.passwordFocus(false);
+	}
 
-	LoginUserView.prototype.onBuild = function ()
-	{
-		var
-			self = this,
-			sSignMeLocal = Local.get(Enums.ClientSideKeyName.LastSignMe),
-			sSignMe = (Settings.settingsGet('SignMe') || 'unused').toLowerCase(),
-			sJsHash = Settings.settingsGet('JsHash'),
-			fSocial = function (iErrorCode) {
-				iErrorCode = Utils.pInt(iErrorCode);
+	onBuild() {
+		const
+			signMeLocal = Local.get(ClientSideKeyName.LastSignMe),
+			signMe = (Settings.settingsGet('SignMe') || 'unused').toLowerCase(),
+			jsHash = Settings.appSettingsGet('jsHash'),
+			fSocial = (iErrorCode) => {
+				iErrorCode = pInt(iErrorCode);
 				if (0 === iErrorCode)
 				{
-					self.submitRequest(true);
-					require('App/User').loginAndLogoutReload();
+					this.submitRequest(true);
+					getApp().loginAndLogoutReload(false);
 				}
 				else
 				{
-					self.submitError(Translator.getNotification(iErrorCode));
+					this.submitError(getNotification(iErrorCode));
 				}
-			}
-		;
+			};
 
 		this.facebookLoginEnabled(!!Settings.settingsGet('AllowFacebookSocial'));
 		this.twitterLoginEnabled(!!Settings.settingsGet('AllowTwitterSocial'));
-		this.googleLoginEnabled(!!Settings.settingsGet('AllowGoogleSocial') &&
-			!!Settings.settingsGet('AllowGoogleSocialAuth'));
+		this.googleLoginEnabled(!!Settings.settingsGet('AllowGoogleSocial') && !!Settings.settingsGet('AllowGoogleSocialAuth'));
+		this.googleFastLoginEnabled(!!Settings.settingsGet('AllowGoogleSocial') && !!Settings.settingsGet('AllowGoogleSocialAuthFast'));
 
-		switch (sSignMe)
+		switch (signMe)
 		{
-			case Enums.LoginSignMeTypeAsString.DefaultOff:
-			case Enums.LoginSignMeTypeAsString.DefaultOn:
-				
-				this.signMeType(Enums.LoginSignMeTypeAsString.DefaultOn === sSignMe ?
-					Enums.LoginSignMeType.DefaultOn : Enums.LoginSignMeType.DefaultOff);
+			case LoginSignMeTypeAsString.DefaultOff:
+			case LoginSignMeTypeAsString.DefaultOn:
 
-				switch (sSignMeLocal)
+				this.signMeType(LoginSignMeTypeAsString.DefaultOn === signMe ?
+					LoginSignMeType.DefaultOn : LoginSignMeType.DefaultOff);
+
+				switch (signMeLocal)
 				{
 					case '-1-':
-						this.signMeType(Enums.LoginSignMeType.DefaultOn);
+						this.signMeType(LoginSignMeType.DefaultOn);
 						break;
 					case '-0-':
-						this.signMeType(Enums.LoginSignMeType.DefaultOff);
+						this.signMeType(LoginSignMeType.DefaultOff);
 						break;
+					// no default
 				}
 
 				break;
+			case LoginSignMeTypeAsString.Unused:
 			default:
-			case Enums.LoginSignMeTypeAsString.Unused:
-				this.signMeType(Enums.LoginSignMeType.Unused);
+				this.signMeType(LoginSignMeType.Unused);
 				break;
 		}
 
 		this.email(AppStore.devEmail);
 		this.password(AppStore.devPassword);
 
-		if (this.googleLoginEnabled())
+		if (this.googleLoginEnabled() || this.googleFastLoginEnabled())
 		{
-			window['rl_' + sJsHash + '_google_login_service'] = fSocial;
+			window['rl_' + jsHash + '_google_login_service'] = fSocial;
 		}
 
 		if (this.facebookLoginEnabled())
 		{
-			window['rl_' + sJsHash + '_facebook_login_service'] = fSocial;
+			window['rl_' + jsHash + '_facebook_login_service'] = fSocial;
 		}
 
 		if (this.twitterLoginEnabled())
 		{
-			window['rl_' + sJsHash + '_twitter_login_service'] = fSocial;
+			window['rl_' + jsHash + '_twitter_login_service'] = fSocial;
 		}
 
-		_.delay(function () {
-			LanguageStore.language.subscribe(function (sValue) {
+		_.delay(() => {
 
-				self.langRequest(true);
+			LanguageStore.language.subscribe((value) => {
 
-				Translator.reload(sValue, function() {
-					self.langRequest(false);
-					self.bSendLanguage = true;
-					$.cookie('rllang', sValue, {'expires': 30});
-				}, function() {
-					self.langRequest(false);
+				this.langRequest(true);
+
+				translatorReload(false, value).then(() => {
+					this.langRequest(false);
+					this.bSendLanguage = true;
+				}, () => {
+					this.langRequest(false);
 				});
 
 			});
-		}, 50);
 
-		Utils.triggerAutocompleteInputChange(true);
-	};
+		}, Magics.Time50ms);
 
-	LoginUserView.prototype.submitForm = function ()
-	{
+		triggerAutocompleteInputChange(true);
+	}
+
+	submitForm() {
 		this.submitCommand();
-	};
+	}
 
-	LoginUserView.prototype.selectLanguage = function ()
-	{
-		kn.showScreenPopup(require('View/Popup/Languages'));
-	};
+	selectLanguage() {
+		showScreenPopup(require('View/Popup/Languages'), [
+			this.language, this.languages(), LanguageStore.userLanguage()
+		]);
+	}
 
-	module.exports = LoginUserView;
+	selectLanguageOnTab(bShift) {
+		if (!bShift)
+		{
+			_.delay(() => {
+				this.emailFocus(true);
+			}, Magics.Time50ms);
 
-}());
+			return false;
+		}
+
+		return true;
+	}
+}
+
+export {LoginUserView, LoginUserView as default};

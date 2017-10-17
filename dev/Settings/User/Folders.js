@@ -1,214 +1,161 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {ClientSideKeyName, Notification, Magics} from 'Common/Enums';
+import {trim, noop} from 'Common/Utils';
+import {getNotification, i18n} from 'Common/Translator';
 
-	var
-		ko = require('ko'),
+import {removeFolderFromCacheList} from 'Common/Cache';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import {appSettingsGet} from 'Storage/Settings';
+import * as Local from 'Storage/Client';
 
-		Settings = require('Storage/Settings'),
-		Data = require('Storage/User/Data'),
-		Cache = require('Storage/User/Cache'),
-		Remote = require('Storage/User/Remote'),
-		Local = require('Storage/Client')
-	;
+import FolderStore from 'Stores/User/Folder';
 
-	/**
-	 * @constructor
-	 */
-	function FoldersUserSettings()
-	{
-		this.folderList = Data.folderList;
+import Promises from 'Promises/User/Ajax';
+import Remote from 'Remote/User/Ajax';
 
-		this.processText = ko.computed(function () {
+import {getApp} from 'Helper/Apps/User';
 
-			var
-				bLoading = Data.foldersLoading(),
-				bCreating = Data.foldersCreating(),
-				bDeleting = Data.foldersDeleting(),
-				bRenaming = Data.foldersRenaming()
-			;
+import {showScreenPopup} from 'Knoin/Knoin';
 
-			if (bCreating)
-			{
-				return Translator.i18n('SETTINGS_FOLDERS/CREATING_PROCESS');
-			}
-			else if (bDeleting)
-			{
-				return Translator.i18n('SETTINGS_FOLDERS/DELETING_PROCESS');
-			}
-			else if (bRenaming)
-			{
-				return Translator.i18n('SETTINGS_FOLDERS/RENAMING_PROCESS');
-			}
-			else if (bLoading)
-			{
-				return Translator.i18n('SETTINGS_FOLDERS/LOADING_PROCESS');
-			}
+class FoldersUserSettings
+{
+	constructor() {
+		this.displaySpecSetting = FolderStore.displaySpecSetting;
+		this.folderList = FolderStore.folderList;
 
-			return '';
+		this.folderListHelp = ko.observable('').extend({throttle: Magics.Time100ms});
 
-		}, this);
+		this.loading = ko.computed(() => {
+			const
+				loading = FolderStore.foldersLoading(),
+				creating = FolderStore.foldersCreating(),
+				deleting = FolderStore.foldersDeleting(),
+				renaming = FolderStore.foldersRenaming();
 
-		this.visibility = ko.computed(function () {
-			return '' === this.processText() ? 'hidden' : 'visible';
-		}, this);
+			return loading || creating || deleting || renaming;
+		});
 
-		this.folderForDeletion = ko.observable(null).extend({'falseTimeout': 3000}).extend({'toggleSubscribe': [this,
-			function (oPrev) {
-				if (oPrev)
-				{
-					oPrev.deleteAccess(false);
-				}
-			}, function (oNext) {
-				if (oNext)
-				{
-					oNext.deleteAccess(true);
-				}
-			}
-		]});
+		this.folderForDeletion = ko.observable(null).deleteAccessHelper();
 
-		this.folderForEdit = ko.observable(null).extend({'toggleSubscribe': [this,
-			function (oPrev) {
-				if (oPrev)
-				{
-					oPrev.edited(false);
-				}
-			}, function (oNext) {
-				if (oNext && oNext.canBeEdited())
-				{
-					oNext.edited(true);
-				}
-			}
-		]});
+		this.folderForEdit = ko.observable(null).extend({toggleSubscribeProperty: [this, 'edited']});
 
-		this.useImapSubscribe = !!Settings.settingsGet('UseImapSubscribe');
+		this.useImapSubscribe = !!appSettingsGet('useImapSubscribe');
 	}
 
-	FoldersUserSettings.prototype.folderEditOnEnter = function (oFolder)
-	{
-		var
-			sEditName = oFolder ? Utils.trim(oFolder.nameForEdit()) : ''
-		;
+	folderEditOnEnter(folder) {
+		const nameToEdit = folder ? trim(folder.nameForEdit()) : '';
 
-		if ('' !== sEditName && oFolder.name() !== sEditName)
+		if ('' !== nameToEdit && folder.name() !== nameToEdit)
 		{
-			Local.set(Enums.ClientSideKeyName.FoldersLashHash, '');
+			Local.set(ClientSideKeyName.FoldersLashHash, '');
 
-			Data.foldersRenaming(true);
-			Remote.folderRename(function (sResult, oData) {
+			getApp().foldersPromisesActionHelper(
+				Promises.folderRename(folder.fullNameRaw, nameToEdit, FolderStore.foldersRenaming),
+				Notification.CantRenameFolder
+			);
 
-				Data.foldersRenaming(false);
-				if (Enums.StorageResultType.Success !== sResult || !oData || !oData.Result)
-				{
-					Data.folderList.error(
-						oData && oData.ErrorCode ? Translator.getNotification(oData.ErrorCode) : Translator.i18n('NOTIFICATIONS/CANT_RENAME_FOLDER'));
-				}
+			removeFolderFromCacheList(folder.fullNameRaw);
 
-				require('App/User').folders();
-
-			}, oFolder.fullNameRaw, sEditName);
-
-			Cache.removeFolderFromCacheList(oFolder.fullNameRaw);
-
-			oFolder.name(sEditName);
+			folder.name(nameToEdit);
 		}
 
-		oFolder.edited(false);
-	};
+		folder.edited(false);
+	}
 
-	FoldersUserSettings.prototype.folderEditOnEsc = function (oFolder)
-	{
-		if (oFolder)
+	folderEditOnEsc(folder) {
+		if (folder)
 		{
-			oFolder.edited(false);
+			folder.edited(false);
 		}
-	};
+	}
 
-	FoldersUserSettings.prototype.onShow = function ()
-	{
-		Data.folderList.error('');
-	};
+	onShow() {
+		FolderStore.folderList.error('');
+	}
 
-	FoldersUserSettings.prototype.createFolder = function ()
-	{
-		require('Knoin/Knoin').showScreenPopup(require('View/Popup/FolderCreate'));
-	};
+	onBuild(oDom) {
+		oDom
+			.on('mouseover', '.delete-folder-parent', () => {
+				this.folderListHelp(i18n('SETTINGS_FOLDERS/HELP_DELETE_FOLDER'));
+			})
+			.on('mouseover', '.subscribe-folder-parent', () => {
+				this.folderListHelp(i18n('SETTINGS_FOLDERS/HELP_SHOW_HIDE_FOLDER'));
+			})
+			.on('mouseover', '.check-folder-parent', () => {
+				this.folderListHelp(i18n('SETTINGS_FOLDERS/HELP_CHECK_FOR_NEW_MESSAGES'));
+			})
+			.on('mouseout', '.subscribe-folder-parent, .check-folder-parent, .delete-folder-parent', () => {
+				this.folderListHelp('');
+			});
+	}
 
-	FoldersUserSettings.prototype.systemFolder = function ()
-	{
-		require('Knoin/Knoin').showScreenPopup(require('View/Popup/FolderSystem'));
-	};
+	createFolder() {
+		showScreenPopup(require('View/Popup/FolderCreate'));
+	}
 
-	FoldersUserSettings.prototype.deleteFolder = function (oFolderToRemove)
-	{
-		if (oFolderToRemove && oFolderToRemove.canBeDeleted() && oFolderToRemove.deleteAccess() &&
-			0 === oFolderToRemove.privateMessageCountAll())
+	systemFolder() {
+		showScreenPopup(require('View/Popup/FolderSystem'));
+	}
+
+	deleteFolder(folderToRemove) {
+		if (folderToRemove && folderToRemove.canBeDeleted() && folderToRemove.deleteAccess() &&
+			0 === folderToRemove.privateMessageCountAll())
 		{
 			this.folderForDeletion(null);
 
-			var
-				fRemoveFolder = function (oFolder) {
-
-					if (oFolderToRemove === oFolder)
-					{
-						return true;
-					}
-
-					oFolder.subFolders.remove(fRemoveFolder);
-					return false;
-				}
-			;
-
-			if (oFolderToRemove)
+			if (folderToRemove)
 			{
-				Local.set(Enums.ClientSideKeyName.FoldersLashHash, '');
+				const
+					fRemoveFolder = function(folder) {
+						if (folderToRemove === folder)
+						{
+							return true;
+						}
+						folder.subFolders.remove(fRemoveFolder);
+						return false;
+					};
 
-				Data.folderList.remove(fRemoveFolder);
+				Local.set(ClientSideKeyName.FoldersLashHash, '');
 
-				Data.foldersDeleting(true);
-				Remote.folderDelete(function (sResult, oData) {
+				FolderStore.folderList.remove(fRemoveFolder);
 
-					Data.foldersDeleting(false);
-					if (Enums.StorageResultType.Success !== sResult || !oData || !oData.Result)
-					{
-						Data.folderList.error(
-							oData && oData.ErrorCode ? Translator.getNotification(oData.ErrorCode) : Translator.i18n('NOTIFICATIONS/CANT_DELETE_FOLDER'));
-					}
+				getApp().foldersPromisesActionHelper(
+					Promises.folderDelete(folderToRemove.fullNameRaw, FolderStore.foldersDeleting),
+					Notification.CantDeleteFolder
+				);
 
-					require('App/User').folders();
-
-				}, oFolderToRemove.fullNameRaw);
-
-				Cache.removeFolderFromCacheList(oFolderToRemove.fullNameRaw);
+				removeFolderFromCacheList(folderToRemove.fullNameRaw);
 			}
 		}
-		else if (0 < oFolderToRemove.privateMessageCountAll())
+		else if (0 < folderToRemove.privateMessageCountAll())
 		{
-			Data.folderList.error(Translator.getNotification(Enums.Notification.CantDeleteNonEmptyFolder));
+			FolderStore.folderList.error(getNotification(Notification.CantDeleteNonEmptyFolder));
 		}
-	};
+	}
 
-	FoldersUserSettings.prototype.subscribeFolder = function (oFolder)
-	{
-		Local.set(Enums.ClientSideKeyName.FoldersLashHash, '');
-		Remote.folderSetSubscribe(Utils.emptyFunction, oFolder.fullNameRaw, true);
+	subscribeFolder(folder) {
+		Local.set(ClientSideKeyName.FoldersLashHash, '');
+		Remote.folderSetSubscribe(noop, folder.fullNameRaw, true);
+		folder.subScribed(true);
+	}
 
-		oFolder.subScribed(true);
-	};
+	unSubscribeFolder(folder) {
+		Local.set(ClientSideKeyName.FoldersLashHash, '');
+		Remote.folderSetSubscribe(noop, folder.fullNameRaw, false);
+		folder.subScribed(false);
+	}
 
-	FoldersUserSettings.prototype.unSubscribeFolder = function (oFolder)
-	{
-		Local.set(Enums.ClientSideKeyName.FoldersLashHash, '');
-		Remote.folderSetSubscribe(Utils.emptyFunction, oFolder.fullNameRaw, false);
+	checkableTrueFolder(folder) {
+		Remote.folderSetCheckable(noop, folder.fullNameRaw, true);
+		folder.checkable(true);
+	}
 
-		oFolder.subScribed(false);
-	};
+	checkableFalseFolder(folder) {
+		Remote.folderSetCheckable(noop, folder.fullNameRaw, false);
+		folder.checkable(false);
+	}
+}
 
-	module.exports = FoldersUserSettings;
-
-}());
+export {FoldersUserSettings, FoldersUserSettings as default};

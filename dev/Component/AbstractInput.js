@@ -1,58 +1,42 @@
 
-(function () {
+import ko from 'ko';
+import {isUnd, trim, pInt} from 'Common/Utils';
+import {SaveSettingsStep} from 'Common/Enums';
+import {AbstractComponent} from 'Component/Abstract';
 
-	'use strict';
-
-	var
-		_ = require('_'),
-		ko = require('ko'),
-
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-
-		AbstractComponent = require('Component/Abstract')
-	;
-
+class AbstractInput extends AbstractComponent
+{
 	/**
-	 * @constructor
-	 *
-	 * @param {Object} oParams
-	 *
-	 * @extends AbstractComponent
+	 * @param {Object} params
 	 */
-	function AbstractInput(oParams)
-	{
-		AbstractComponent.call(this);
+	constructor(params) {
 
-		this.value = oParams.value || '';
-		this.size = oParams.size || 0;
-		this.label = oParams.label || '';
-		this.preLabel = oParams.preLabel || '';
-		this.enable = Utils.isUnd(oParams.enable) ? true : oParams.enable;
-		this.trigger = oParams.trigger && oParams.trigger.subscribe ? oParams.trigger : null;
-		this.placeholder = oParams.placeholder || '';
+		super();
 
-		this.labeled = !Utils.isUnd(oParams.label);
-		this.preLabeled = !Utils.isUnd(oParams.preLabel);
-		this.triggered = !Utils.isUnd(oParams.trigger) && !!this.trigger;
+		this.value = params.value || '';
+		this.size = params.size || 0;
+		this.label = params.label || '';
+		this.preLabel = params.preLabel || '';
+		this.enable = isUnd(params.enable) ? true : params.enable;
+		this.trigger = params.trigger && params.trigger.subscribe ? params.trigger : null;
+		this.placeholder = params.placeholder || '';
+
+		this.labeled = !isUnd(params.label);
+		this.preLabeled = !isUnd(params.preLabel);
+		this.triggered = !isUnd(params.trigger) && !!this.trigger;
 
 		this.classForTrigger = ko.observable('');
 
-		this.className = ko.computed(function () {
+		this.className = ko.computed(() => {
+			const
+				size = ko.unwrap(this.size),
+				suffixValue = this.trigger ? ' ' + trim('settings-saved-trigger-input ' + this.classForTrigger()) : '';
+			return (0 < size ? 'span' + size : '') + suffixValue;
+		});
 
-			var
-				iSize = ko.unwrap(this.size),
-				sSuffixValue = this.trigger ?
-					' ' + Utils.trim('settings-saved-trigger-input ' + this.classForTrigger()) : ''
-			;
-
-			return (0 < iSize ? 'span' + iSize : '') + sSuffixValue;
-
-		}, this);
-
-		if (!Utils.isUnd(oParams.width) && oParams.element)
+		if (!isUnd(params.width) && params.element)
 		{
-			oParams.element.find('input,select,textarea').css('width', oParams.width);
+			params.element.find('input,select,textarea').css('width', params.width);
 		}
 
 		this.disposable.push(this.className);
@@ -67,26 +51,20 @@
 		}
 	}
 
-	AbstractInput.prototype.setTriggerState = function (nValue)
-	{
-		switch (Utils.pInt(nValue))
+	setTriggerState(value) {
+		switch (pInt(value))
 		{
-			case Enums.SaveSettingsStep.TrueResult:
+			case SaveSettingsStep.TrueResult:
 				this.classForTrigger('success');
 				break;
-			case Enums.SaveSettingsStep.FalseResult:
+			case SaveSettingsStep.FalseResult:
 				this.classForTrigger('error');
 				break;
 			default:
 				this.classForTrigger('');
 				break;
 		}
-	};
+	}
+}
 
-	_.extend(AbstractInput.prototype, AbstractComponent.prototype);
-
-	AbstractInput.componentExportHelper = AbstractComponent.componentExportHelper;
-
-	module.exports = AbstractInput;
-
-}());
+export {AbstractInput, AbstractInput as default};

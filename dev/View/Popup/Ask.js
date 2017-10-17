@@ -1,28 +1,22 @@
 
-(function () {
+import ko from 'ko';
+import key from 'key';
 
-	'use strict';
+import {KeyState} from 'Common/Enums';
+import {isFunc} from 'Common/Utils';
+import {i18n} from 'Common/Translator';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
-		key = require('key'),
+import {popup} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
-
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function AskPopupView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsAsk');
+@popup({
+	name: 'View/Popup/Ask',
+	templateID: 'PopupsAsk'
+})
+class AskPopupView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
 		this.askDesc = ko.observable('');
 		this.yesButton = ko.observable('');
@@ -36,46 +30,38 @@
 
 		this.bFocusYesOnShow = true;
 		this.bDisabeCloseOnEsc = true;
-		this.sDefaultKeyScope = Enums.KeyState.PopupAsk;
-
-		kn.constructorEnd(this);
+		this.sDefaultKeyScope = KeyState.PopupAsk;
 	}
 
-	kn.extendAsViewModel(['View/Popup/Ask', 'PopupsAskViewModel'], AskPopupView);
-	_.extend(AskPopupView.prototype, AbstractView.prototype);
-
-	AskPopupView.prototype.clearPopup = function ()
-	{
+	clearPopup() {
 		this.askDesc('');
-		this.yesButton(Translator.i18n('POPUPS_ASK/BUTTON_YES'));
-		this.noButton(Translator.i18n('POPUPS_ASK/BUTTON_NO'));
+		this.yesButton(i18n('POPUPS_ASK/BUTTON_YES'));
+		this.noButton(i18n('POPUPS_ASK/BUTTON_NO'));
 
 		this.yesFocus(false);
 		this.noFocus(false);
 
 		this.fYesAction = null;
 		this.fNoAction = null;
-	};
+	}
 
-	AskPopupView.prototype.yesClick = function ()
-	{
+	yesClick() {
 		this.cancelCommand();
 
-		if (Utils.isFunc(this.fYesAction))
+		if (isFunc(this.fYesAction))
 		{
 			this.fYesAction.call(null);
 		}
-	};
+	}
 
-	AskPopupView.prototype.noClick = function ()
-	{
+	noClick() {
 		this.cancelCommand();
 
-		if (Utils.isFunc(this.fNoAction))
+		if (isFunc(this.fNoAction))
 		{
 			this.fNoAction.call(null);
 		}
-	};
+	}
 
 	/**
 	 * @param {string} sAskDesc
@@ -83,40 +69,40 @@
 	 * @param {Function=} fNoFunc
 	 * @param {string=} sYesButton
 	 * @param {string=} sNoButton
-	 * @param {boolean=} bFocusYesOnShow
+	 * @param {boolean=} bFocusYesOnShow = true
+	 * @returns {void}
 	 */
-	AskPopupView.prototype.onShow = function (sAskDesc, fYesFunc, fNoFunc, sYesButton, sNoButton, bFocusYesOnShow)
-	{
+	onShow(askDesc, fYesFunc = null, fNoFunc = null, yesButton = '', noButton = '', isFocusYesOnShow = true) {
+
 		this.clearPopup();
 
 		this.fYesAction = fYesFunc || null;
 		this.fNoAction = fNoFunc || null;
 
-		this.askDesc(sAskDesc || '');
-		if (sYesButton)
+		this.askDesc(askDesc || '');
+
+		if (yesButton)
 		{
-			this.yesButton(sYesButton);
+			this.yesButton(yesButton);
 		}
 
-		if (sYesButton)
+		if (noButton)
 		{
-			this.yesButton(sNoButton);
+			this.noButton(noButton);
 		}
 
-		this.bFocusYesOnShow = Utils.isUnd(bFocusYesOnShow) ? true : !!bFocusYesOnShow;
-	};
+		this.bFocusYesOnShow = !!isFocusYesOnShow;
+	}
 
-	AskPopupView.prototype.onFocus = function ()
-	{
+	onShowWithDelay() {
 		if (this.bFocusYesOnShow)
 		{
 			this.yesFocus(true);
 		}
-	};
+	}
 
-	AskPopupView.prototype.onBuild = function ()
-	{
-		key('tab, shift+tab, right, left', Enums.KeyState.PopupAsk, _.bind(function () {
+	onBuild() {
+		key('tab, shift+tab, right, left', KeyState.PopupAsk, () => {
 			if (this.yesFocus())
 			{
 				this.noFocus(true);
@@ -126,14 +112,13 @@
 				this.yesFocus(true);
 			}
 			return false;
-		}, this));
+		});
 
-		key('esc', Enums.KeyState.PopupAsk, _.bind(function () {
+		key('esc', KeyState.PopupAsk, () => {
 			this.noClick();
 			return false;
-		}, this));
-	};
+		});
+	}
+}
 
-	module.exports = AskPopupView;
-
-}());
+export {AskPopupView, AskPopupView as default};

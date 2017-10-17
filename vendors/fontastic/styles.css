@@ -374,3 +374,18 @@
 .icon-braille:before {
   content: "\e06e";
 }
+.icon-play:before {
+  content: "\e070";
+}
+.icon-pause:before {
+  content: "\e071";
+}
+.icon-stop:before {
+  content: "\e072";
+}
+.icon-check-mark-circle-two:before {
+  content: "\e073";
+}
+.icon-laptop:before {
+  content: "\e075";
+}

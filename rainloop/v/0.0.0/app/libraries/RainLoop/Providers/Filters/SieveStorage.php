@@ -59,6 +59,7 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 		$aFilters = array();
 
 		$oSieveClient = \MailSo\Sieve\ManageSieveClient::NewInstance()->SetLogger($this->oLogger);
+		$oSieveClient->SetTimeOuts(10, (int) $this->oConfig->Get('labs', 'sieve_timeout', 10));
 
 		if ($oAccount->SieveConnectAndLoginHelper($this->oPlugins, $oSieveClient, $this->oConfig))
 		{
@@ -95,6 +96,9 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 			'Capa' => $bAllowRaw ? $aModules : array(),
 			'Modules' => array(
 				'redirect' => \in_array('fileinto', $aModules),
+				'regex' => \in_array('regex', $aModules),
+				'relational' => \in_array('relational', $aModules),
+				'date' => \in_array('date', $aModules),
 				'moveto' => \in_array('fileinto', $aModules),
 				'reject' => \in_array('reject', $aModules),
 				'vacation' => \in_array('vacation', $aModules),
@@ -114,6 +118,7 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 	public function Save($oAccount, $aFilters, $sRaw = '', $bRawIsActive = false)
 	{
 		$oSieveClient = \MailSo\Sieve\ManageSieveClient::NewInstance()->SetLogger($this->oLogger);
+		$oSieveClient->SetTimeOuts(10, (int) \RainLoop\Api::Config()->Get('labs', 'sieve_timeout', 10));
 
 		if ($oAccount->SieveConnectAndLoginHelper($this->oPlugins, $oSieveClient, $this->oConfig))
 		{
@@ -159,16 +164,27 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 	 *
 	 * @return string
 	 */
-	private function conditionToSieveScript($oCondition)
+	private function conditionToSieveScript($oCondition, &$aCapa)
 	{
 		$sResult = '';
 		$sTypeWord = '';
+		$bTrue = true;
 
 		$sValue = \trim($oCondition->Value());
-		if (0 < strlen($sValue))
+		$sValueSecond = \trim($oCondition->ValueSecond());
+
+		if (0 < \strlen($sValue) ||
+			(0 < \strlen($sValue) && 0 < \strlen($sValueSecond) &&
+				\RainLoop\Providers\Filters\Enumerations\ConditionField::HEADER === $oCondition->Field()))
 		{
 			switch ($oCondition->Type())
 			{
+				case \RainLoop\Providers\Filters\Enumerations\ConditionType::OVER:
+					$sTypeWord = ':over';
+					break;
+				case \RainLoop\Providers\Filters\Enumerations\ConditionType::UNDER:
+					$sTypeWord = ':under';
+					break;
 				case \RainLoop\Providers\Filters\Enumerations\ConditionType::NOT_EQUAL_TO:
 					$sResult .= 'not ';
 				case \RainLoop\Providers\Filters\Enumerations\ConditionType::EQUAL_TO:
@@ -178,6 +194,14 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 					$sResult .= 'not ';
 				case \RainLoop\Providers\Filters\Enumerations\ConditionType::CONTAINS:
 					$sTypeWord = ':contains';
+					break;
+				case \RainLoop\Providers\Filters\Enumerations\ConditionType::REGEX:
+					$sTypeWord = ':regex';
+					$aCapa['regex'] = true;
+					break;
+				default:
+					$bTrue = false;
+					$sResult = '/* @Error: unknown type value */ false';
 					break;
 			}
 
@@ -192,26 +216,43 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 				case \RainLoop\Providers\Filters\Enumerations\ConditionField::SUBJECT:
 					$sResult .= 'header '.$sTypeWord.' ["Subject"]';
 					break;
+				case \RainLoop\Providers\Filters\Enumerations\ConditionField::HEADER:
+					$sResult .= 'header '.$sTypeWord.' ["'.$this->quote($sValueSecond).'"]';
+					break;
+				case \RainLoop\Providers\Filters\Enumerations\ConditionField::SIZE:
+					$sResult .= 'size '.$sTypeWord;
+					break;
+				default:
+					$bTrue = false;
+					$sResult = '/* @Error: unknown field value */ false';
+					break;
 			}
 
-			if (\in_array($oCondition->Field(), array(
-				\RainLoop\Providers\Filters\Enumerations\ConditionField::FROM,
-				\RainLoop\Providers\Filters\Enumerations\ConditionField::RECIPIENT
-			)) && false !== \strpos($sValue, ','))
+			if ($bTrue)
 			{
-				$self = $this;
-				$aValue = \array_map(function ($sValue) use ($self) {
-					return '"'.$self->quote(\trim($sValue)).'"';
-				}, \explode(',', $sValue));
+				if (\in_array($oCondition->Field(), array(
+					\RainLoop\Providers\Filters\Enumerations\ConditionField::FROM,
+					\RainLoop\Providers\Filters\Enumerations\ConditionField::RECIPIENT
+				)) && false !== \strpos($sValue, ','))
+				{
+					$self = $this;
+					$aValue = \array_map(function ($sValue) use ($self) {
+						return '"'.$self->quote(\trim($sValue)).'"';
+					}, \explode(',', $sValue));
 
-				$sResult .= ' ['.\trim(\implode(', ', $aValue)).']';
-			}
-			else
-			{
-				$sResult .= ' "'.$this->quote($sValue).'"';
-			}
+					$sResult .= ' ['.\trim(\implode(', ', $aValue)).']';
+				}
+				else if (\RainLoop\Providers\Filters\Enumerations\ConditionField::SIZE === $oCondition->Field())
+				{
+					$sResult .= ' '.$this->quote($sValue);
+				}
+				else
+				{
+					$sResult .= ' "'.$this->quote($sValue).'"';
+				}
 
-			$sResult = \preg_replace('/[\s]+/u', ' ', $sResult);
+				$sResult = \MailSo\Base\Utils::StripSpaces($sResult);
+			}
 		}
 		else
 		{
@@ -250,7 +291,7 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 					foreach ($aConditions as $oCond)
 					{
 						$bTrim = true;
-						$sCons = $this->conditionToSieveScript($oCond);
+						$sCons = $this->conditionToSieveScript($oCond, $aCapa);
 						if (!empty($sCons))
 						{
 							$aResult[] = $sTab.$sCons.',';
@@ -268,7 +309,7 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 					$aResult[] = 'if allof(';
 					foreach ($aConditions as $oCond)
 					{
-						$aResult[] = $sTab.$this->conditionToSieveScript($oCond).',';
+						$aResult[] = $sTab.$this->conditionToSieveScript($oCond, $aCapa).',';
 					}
 
 					$aResult[\count($aResult) - 1] = \rtrim($aResult[\count($aResult) - 1], ',');
@@ -277,7 +318,7 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 			}
 			else if (1 === \count($aConditions))
 			{
-				$aResult[] = 'if '.$this->conditionToSieveScript($aConditions[0]).'';
+				$aResult[] = 'if '.$this->conditionToSieveScript($aConditions[0], $aCapa).'';
 			}
 			else
 			{
@@ -318,6 +359,7 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 				$sValue = \trim($oFilter->ActionValue());
 				$sValueSecond = \trim($oFilter->ActionValueSecond());
 				$sValueThird = \trim($oFilter->ActionValueThird());
+				$sValueFourth = \trim($oFilter->ActionValueFourth());
 				if (0 < \strlen($sValue))
 				{
 					$aCapa['vacation'] = true;
@@ -326,8 +368,8 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 					$sSubject = '';
 					if (0 < \strlen($sValueSecond))
 					{
-						$sSubject = ':subject "'.$this->quote(
-							\preg_replace('/[\s]+/u', ' ', $sValueSecond)).'" ';
+						$sSubject = ':subject "'.
+							$this->quote(\MailSo\Base\Utils::StripSpaces($sValueSecond)).'" ';
 					}
 
 					if (0 < \strlen($sValueThird) && \is_numeric($sValueThird) && 1 < (int) $sValueThird)
@@ -335,8 +377,24 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 						$iDays = (int) $sValueThird;
 					}
 
-					$aResult[] = $sTab.'vacation :days '.$iDays.' '.$sSubject.'"'.$this->quote($sValue).'";';
+					$sAddresses = '';
+					if (0 < \strlen($sValueFourth))
+					{
+						$self = $this;
 
+						$aAddresses = \explode(',', $sValueFourth);
+						$aAddresses = \array_filter(\array_map(function ($sEmail) use ($self) {
+							$sEmail = \trim($sEmail);
+							return 0 < \strlen($sEmail) ? '"'.$self->quote($sEmail).'"' : '';
+						}, $aAddresses), 'strlen');
+
+						if (0 < \count($aAddresses))
+						{
+							$sAddresses = ':addresses ['.\implode(', ', $aAddresses).'] ';
+						}
+					}
+
+					$aResult[] = $sTab.'vacation :days '.$iDays.' '.$sAddresses.$sSubject.'"'.$this->quote($sValue).'";';
 					if ($oFilter->Stop())
 					{
 						$aResult[] = $sTab.'stop;';
@@ -491,7 +549,7 @@ class SieveStorage implements \RainLoop\Providers\Filters\FiltersInterface
 	 *
 	 * @return string
 	 */
-	private function quote($sValue)
+	public function quote($sValue)
 	{
 		return \str_replace(array('\\', '"'), array('\\\\', '\\"'), \trim($sValue));
 	}

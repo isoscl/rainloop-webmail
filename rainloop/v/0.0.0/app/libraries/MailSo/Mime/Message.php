@@ -256,7 +256,8 @@ class Message
 	 */
 	public function SetReferences($sReferences)
 	{
-		$this->aHeadersValue[\MailSo\Mime\Enumerations\Header::REFERENCES] = $sReferences;
+		$this->aHeadersValue[\MailSo\Mime\Enumerations\Header::REFERENCES] =
+			\MailSo\Base\Utils::StripSpaces($sReferences);
 
 		return $this;
 	}
@@ -510,7 +511,8 @@ class Message
 	 */
 	private function generateNewBoundary()
 	{
-		return '----=_Part_'.rand(100, 999).'_'.rand(100000000, 999999999).'.'.time();
+		return '--='.\MailSo\Config::$BoundaryPrefix.
+			\rand(100, 999).'_'.rand(100000000, 999999999).'.'.\time();
 	}
 
 	/**

@@ -1,99 +1,67 @@
 
-(function () {
+import window from 'window';
+import Cookies from 'js-cookie';
+import {isUnd} from 'Common/Utils';
+import {CLIENT_SIDE_STORAGE_INDEX_NAME} from 'Common/Consts';
 
-	'use strict';
-
-	var
-		$ = require('$'),
-		JSON = require('JSON'),
-
-		Consts = require('Common/Consts'),
-		Utils = require('Common/Utils')
-	;
-
+class CookieDriver
+{
 	/**
-	 * @constructor
+	 * @param {string} key
+	 * @param {*} data
+	 * @returns {boolean}
 	 */
-	function CookieDriver()
-	{
+	set(key, data) {
+
+		let
+			result = false,
+			storageResult = null;
+
+		try
+		{
+			storageResult = Cookies.getJSON(CLIENT_SIDE_STORAGE_INDEX_NAME);
+		}
+		catch (e) {} // eslint-disable-line no-empty
+
+		(storageResult || (storageResult = {}))[key] = data;
+
+		try
+		{
+			Cookies.set(CLIENT_SIDE_STORAGE_INDEX_NAME, storageResult, {
+				expires: 30
+			});
+
+			result = true;
+		}
+		catch (e) {} // eslint-disable-line no-empty
+
+		return result;
 	}
 
 	/**
-	 * @static
-	 * @return {boolean}
+	 * @param {string} key
+	 * @returns {*}
 	 */
-	CookieDriver.supported = function ()
-	{
+	get(key) {
+
+		let result = null;
+
+		try
+		{
+			const storageResult = Cookies.getJSON(CLIENT_SIDE_STORAGE_INDEX_NAME);
+			result = (storageResult && !isUnd(storageResult[key])) ? storageResult[key] : null;
+		}
+		catch (e) {} // eslint-disable-line no-empty
+
+		return result;
+	}
+
+	/**
+	 * @returns {boolean}
+	 */
+	static supported() {
 		return !!(window.navigator && window.navigator.cookieEnabled);
-	};
+	}
+}
 
-	/**
-	 * @param {string} sKey
-	 * @param {*} mData
-	 * @return {boolean}
-	 */
-	CookieDriver.prototype.set = function (sKey, mData)
-	{
-		var
-			mStorageValue = $.cookie(Consts.Values.ClientSideStorageIndexName),
-			bResult = false,
-			mResult = null
-		;
-
-		try
-		{
-			mResult = null === mStorageValue ? null : JSON.parse(mStorageValue);
-		}
-		catch (oException) {}
-
-		if (!mResult)
-		{
-			mResult = {};
-		}
-
-		mResult[sKey] = mData;
-
-		try
-		{
-			$.cookie(Consts.Values.ClientSideStorageIndexName, JSON.stringify(mResult), {
-				'expires': 30
-			});
-
-			bResult = true;
-		}
-		catch (oException) {}
-
-		return bResult;
-	};
-
-	/**
-	 * @param {string} sKey
-	 * @return {*}
-	 */
-	CookieDriver.prototype.get = function (sKey)
-	{
-		var
-			mStorageValue = $.cookie(Consts.Values.ClientSideStorageIndexName),
-			mResult = null
-		;
-
-		try
-		{
-			mResult = null === mStorageValue ? null : JSON.parse(mStorageValue);
-			if (mResult && !Utils.isUnd(mResult[sKey]))
-			{
-				mResult = mResult[sKey];
-			}
-			else
-			{
-				mResult = null;
-			}
-		}
-		catch (oException) {}
-
-		return mResult;
-	};
-
-	module.exports = CookieDriver;
-
-}());
+export {CookieDriver, CookieDriver as default};

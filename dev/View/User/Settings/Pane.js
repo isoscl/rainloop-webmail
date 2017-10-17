@@ -1,54 +1,60 @@
 
-(function () {
+import {inbox} from 'Common/Links';
+import {getFolderInboxName} from 'Common/Cache';
+import {leftPanelDisabled} from 'Common/Globals';
 
-	'use strict';
+import * as Settings from 'Storage/Settings';
 
-	var
-		_ = require('_'),
-		key = require('key'),
+import MessageStore from 'Stores/User/Message';
 
-		Enums = require('Common/Enums'),
-		Links = require('Common/Links'),
+import {view, ViewType, setHash} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Data = require('Storage/User/Data'),
-		Cache = require('Storage/User/Cache'),
+@view({
+	name: 'View/User/Settings/Pane',
+	type: ViewType.Right,
+	templateID: 'SettingsPane'
+})
+class PaneSettingsUserView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
+		this.mobile = Settings.appSettingsGet('mobile');
 
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function PaneSettingsUserView()
-	{
-		AbstractView.call(this, 'Right', 'SettingsPane');
-
-		kn.constructorEnd(this);
+		this.leftPanelDisabled = leftPanelDisabled;
 	}
 
-	kn.extendAsViewModel(['View/User/Settings/Pane', 'View/App/Settings/Pane', 'SettingsPaneViewModel'], PaneSettingsUserView);
-	_.extend(PaneSettingsUserView.prototype, AbstractView.prototype);
+	onShow() {
+		MessageStore.message(null);
+	}
 
-	PaneSettingsUserView.prototype.onBuild = function ()
-	{
-		var self = this;
-		key('esc', Enums.KeyState.Settings, function () {
-			self.backToMailBoxClick();
-		});
-	};
+	hideLeft(item, event) {
+		event.preventDefault();
+		event.stopPropagation();
 
-	PaneSettingsUserView.prototype.onShow = function ()
-	{
-		Data.message(null);
-	};
+		leftPanelDisabled(true);
+	}
 
-	PaneSettingsUserView.prototype.backToMailBoxClick = function ()
-	{
-		kn.setHash(Links.inbox(Cache.getFolderInboxName()));
-	};
+	showLeft(item, event) {
+		event.preventDefault();
+		event.stopPropagation();
 
-	module.exports = PaneSettingsUserView;
+		leftPanelDisabled(false);
+	}
 
-}());
+	onBuild(dom) {
+		if (this.mobile)
+		{
+			dom.on('click', () => {
+				leftPanelDisabled(true);
+			});
+		}
+	}
+
+	backToMailBoxClick() {
+		setHash(inbox(getFolderInboxName()));
+	}
+}
+
+export {PaneSettingsUserView, PaneSettingsUserView as default};

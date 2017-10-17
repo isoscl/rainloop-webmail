@@ -4,7 +4,28 @@
 
 .b-folders {
 
+	.move-action-content-wrapper {
+		z-index: -1;
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		opacity: 0.05;
+		background-color: #fff;
+		background-size: 60px 60px;
+		background-image: linear-gradient(135deg, #000 25%, transparent 25%,
+			transparent 50%, #000 50%, #000 75%,
+			transparent 75%, transparent);
+	}
+
 	&.focused .b-content {
+	}
+
+	.b-folders-user {
+		.e-link.print-count.system .badge {
+			display: none !important;
+		}
 	}
 
 	.b-toolbar {
@@ -13,19 +34,22 @@
 		right: 0;
 		left: 0;
 		height: 30px;
-		padding: 10px 10px 0 @rlLowMargin;
+		padding: 10px 0 0 @rlLowMargin;
 		color: #fff;
 		z-index: 101;
 	}
 
 	.b-footer {
 		position: absolute;
-		bottom: 20px;
+		bottom: 10px;
 		right: 0;
 		left: 0;
-		height: 20px;
+		height: 30px;
 		padding: 0 10px 0 5px;
 		z-index: 101;
+
+		overflow: hidden;
+		white-space: nowrap;
 	}
 
 	.b-content {
@@ -37,7 +61,6 @@
 		overflow: hidden;
 		overflow-y: auto;
 		min-width: 100px;
-//		padding: 5px;
 
 		.content {
 			-webkit-overflow-scrolling: touch;
@@ -67,6 +90,37 @@
 			cursor: not-allowed;
 			font-size: 14px;
 
+			.focused-poiner {
+				float: left;
+				display: inline-block;
+				background-color: transparent;
+				height: 100%;
+				width: 3px;
+				position: absolute;
+				top: 0;
+				left: 0;
+			}
+
+			.inbox-star-icon {
+				display: none;
+				margin-left: 7px;
+
+				.icon-star {
+					display: none;
+				}
+				.icon-star-empty {
+					opacity: .5;
+
+					&:hover {
+						opacity: 1;
+					}
+				}
+			}
+
+			&.is-inbox .inbox-star-icon {
+				display: inline;
+			}
+
 			padding: 0;
 			padding-left: @folderItemPadding;
 			padding-right: @folderItemPadding;
@@ -91,6 +145,10 @@
 
 			&.focused {
 				background-color: #888;
+
+				.focused-poiner {
+					background-color: #fff;
+				}
 			}
 
 			&.system {
@@ -137,6 +195,16 @@
 		}
 	}
 
+	&.inbox-is-starred {
+		.icon-star {
+			color: orange;
+			display: inline-block !important;
+		}
+		.icon-star-empty {
+			display: none;
+		}
+	}
+
 	.b-folder-system-item {
 		font-weight: bold;
 	}
@@ -144,32 +212,82 @@
 	.b-sub-folders .e-item .e-link {
 		padding-left: @subPadding * 1 + @folderItemPadding;
 	}
-	.b-sub-folders.unpaddig-folder .e-item .e-link {
-		padding-left: @folderItemPadding;
-	}
 	.b-sub-folders .b-sub-folders .e-item .e-link {
 		padding-left: @subPadding * 2 + @folderItemPadding;
-	}
-	.b-sub-folders.unpaddig-folder .b-sub-folders .e-item .e-link {
-		padding-left: @subPadding * 1 + @folderItemPadding;
 	}
 	.b-sub-folders .b-sub-folders .b-sub-folders .e-item .e-link {
 		padding-left: @subPadding * 3 + @folderItemPadding;
 	}
-	.b-sub-folders.unpaddig-folder .b-sub-folders .b-sub-folders .e-item .e-link {
-		padding-left: @subPadding * 2 + @folderItemPadding;
-	}
 	.b-sub-folders .b-sub-folders .b-sub-folders .b-sub-folders .e-item .e-link {
 		padding-left: @subPadding * 4 + @folderItemPadding;
 	}
-	.b-sub-folders.unpaddig-folder .b-sub-folders .b-sub-folders .b-sub-folders .e-item .e-link {
-		padding-left: @subPadding * 3 + @folderItemPadding;
+
+/**/
+	&.single-root-inbox .i-am-inbox.e-link {
+		display: none !important;
+	}
+
+	&.single-root-inbox .i-am-inbox-wrapper > .b-sub-folders {
+		max-height: none !important;
+		height: inherit !important;
+		display: block !important;
+	}
+
+	&.single-root-inbox .i-am-inbox-wrapper {
+		.b-sub-folders .e-item .e-link {
+			padding-left: @folderItemPadding;
+		}
+		.b-sub-folders .b-sub-folders .e-item .e-link {
+			padding-left: @subPadding * 1 + @folderItemPadding;
+		}
+		.b-sub-folders .b-sub-folders .b-sub-folders .e-item .e-link {
+			padding-left: @subPadding * 2 + @folderItemPadding;
+		}
+		.b-sub-folders .b-sub-folders .b-sub-folders .b-sub-folders .e-item .e-link {
+			padding-left: @subPadding * 3 + @folderItemPadding;
+		}
+	}
+/**/
+}
+
+.btn {
+	.btn-text-wrp {
+		padding-left: 7px;
+		white-space: normal;
+	}
+
+	&.buttonCompose {
+		width: calc(~'100% - 85px');
+		max-width: fit-content;
+		white-space: nowrap;
+		overflow: hidden;
+		height: 19px;
+		display: inline-block;
+		margin-top: 1px;
 	}
 }
 
-html.rl-left-panel-disabled {
+html.rl-left-panel-disabled, html.rl-left-panel-short {
+	.buttonComposeText{
+		display: none;
+	}
+	.btn.buttonCompose {
+		width: auto;
+	}
 	.btn.buttonContacts {
 		margin-top: 10px !important;
 		margin-left: 0 !important;
+	}
+	&.rl-mobile #rl-left {
+		visibility: hidden;
+	}
+}
+
+html.rl-mobile {
+	.btn.buttonCompose {
+		width: 100%;
+	}
+	.btn.buttonContacts {
+		display: none;
 	}
 }

@@ -2,6 +2,32 @@
 (function() {
 
 	var
+		selectRange = function (el, start, end) {
+			if (!el) {
+				return;
+			}
+			if (end === undefined) {
+				end = start;
+			}
+			if('selectionStart' in el) {
+				el.selectionStart = start;
+				el.selectionEnd = end;
+			} else if(el.setSelectionRange) {
+				el.setSelectionRange(start, end);
+			} else if(el.createTextRange) {
+				var range = el.createTextRange();
+				range.collapse(true);
+				range.moveEnd('character', end);
+				range.moveStart('character', start);
+				range.select();
+			}
+		},
+		toTop = function (el) {
+			selectRange(el, 0);
+			if (el) {
+				el.scrollTop = 0;
+			}
+		},
 		simplePlainToHtml = function (sPlain) {
 			return sPlain
 				.replace(/&/g, '&amp;')
@@ -50,10 +76,11 @@
 		hidpi: true,
 		init: function(editor)
 		{
-			if (editor.elementMode === CKEDITOR.ELEMENT_MODE_INLINE)
+			if (editor.elementMode === CKEDITOR.ELEMENT_MODE_INLINE) {
 				return;
+			}
 
-			editor.__plainUtils = {
+			editor.__textUtils = {
 				plainToHtml: function(data) {
 					return window.rainloop_Utils_plainToHtml ?
 						window.rainloop_Utils_plainToHtml(data, true) : simplePlainToHtml(data);
@@ -86,17 +113,16 @@
 				textarea.setAttribute('dir', 'ltr');
 				textarea.addClass('cke_plain');
 
+				CKEDITOR.plugins.clipboard.preventDefaultDropOnElement(textarea);
+
 				contentsSpace.append(textarea);
 
 				var editable = editor.editable(new plainEditable(editor, textarea));
 
 				editable.setData(editor.getData(1));
 				editor.__plain = editable;
+				editor.__textarea = textarea.$;
 
-				// Having to make <textarea> fixed sized to conquer the following bugs:
-				// 1. The textarea height/width='100%' doesn't constraint to the 'td' in IE6/7.
-				// 2. Unexpected vertical-scrolling behavior happens whenever focus is moving out of editor
-				// if text content within it has overflowed. (#4762)
 				if (CKEDITOR.env.ie) {
 					editable.attachListener(editor, 'resize', onResize, editable);
 					editable.attachListener(CKEDITOR.document.getWindow(), 'resize', onResize, editable);
@@ -120,6 +146,12 @@
 			editor.on('mode', function() {
 				editor.getCommand('plain').setState(editor.mode === 'plain' ? CKEDITOR.TRISTATE_ON : CKEDITOR.TRISTATE_OFF);
 				editor.editable().addClass('cke_enable_context_menu');
+
+				editor.focus();
+
+				if (editor.mode === 'plain') {
+					toTop(editor.__textarea);
+				}
 			});
 
 			function onResize() {
@@ -135,7 +167,7 @@
 		base: CKEDITOR.editable,
 		proto: {
 			setData: function(data) {
-				this.setValue(this.editor.__plainUtils.htmlToPlain(data));
+				this.setValue(this.editor.__textUtils.htmlToPlain(data));
 				this.editor.fire('dataReady');
 			},
 			setRawData: function(data) {
@@ -143,7 +175,7 @@
 				this.editor.fire('dataReady');
 			},
 			getData: function() {
-				return this.editor.__plainUtils.plainToHtml(this.getValue());
+				return this.editor.__textUtils.plainToHtml(this.getValue());
 			},
 			getRawData: function() {
 				return this.getValue();
@@ -161,25 +193,24 @@
 			}
 		}
 	});
-})();
 
-CKEDITOR.plugins.plain = {
-	commands: {
-		plain: {
-			modes: {
-				wysiwyg: 1, plain: 1
-			},
-			editorFocus: false,
-			readOnly: 1,
-			exec: function(editor) {
-				if (editor.mode === 'wysiwyg') {
-					editor.fire('saveSnapshot');
-				}
-
-				editor.getCommand('plain').setState(CKEDITOR.TRISTATE_DISABLED);
-				editor.setMode(editor.mode === 'plain' ? 'wysiwyg' : 'plain');
-			},
-			canUndo: false
+	CKEDITOR.plugins.plain = {
+		commands: {
+			plain: {
+				modes: {
+					wysiwyg: 1, plain: 1
+				},
+				editorFocus: true,
+				readOnly: false,
+				exec: function(editor) {
+					if (editor.mode === 'wysiwyg') {
+						editor.fire('saveSnapshot');
+					}
+					editor.getCommand('plain').setState(CKEDITOR.TRISTATE_DISABLED);
+					editor.setMode(editor.mode === 'plain' ? 'wysiwyg' : 'plain');
+				},
+				canUndo: false
+			}
 		}
-	}
-};
+	};
+}());

@@ -1,77 +1,52 @@
 
-(function () {
+import _ from '_';
+import {isObject, isUnd} from 'Common/Utils';
+import * as Plugins from 'Common/Plugins';
 
-	'use strict';
+const SUBS = {};
 
-	var
-		_ = require('_'),
-
-		Utils = require('Common/Utils'),
-		Plugins = require('Common/Plugins')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function Events()
+/**
+ * @param {string|Object} name
+ * @param {Function} func
+ * @param {Object=} context
+ */
+export function sub(name, func, context)
+{
+	if (isObject(name))
 	{
-		this.oSubs = {};
+		context = func || null;
+		func = null;
+
+		_.each(name, (subFunc, subName) => {
+			sub(subName, subFunc, context);
+		});
 	}
-
-	Events.prototype.oSubs = {};
-
-	/**
-	 * @param {string} sName
-	 * @param {Function} fFunc
-	 * @param {Object=} oContext
-	 * @return {Events}
-	 */
-	Events.prototype.sub = function (sName, fFunc, oContext)
+	else
 	{
-		if (Utils.isObject(sName))
+		if (isUnd(SUBS[name]))
 		{
-			oContext = fFunc || null;
-			fFunc = null;
-
-			_.each(sName, function (fSubFunc, sSubName) {
-				this.sub(sSubName, fSubFunc, oContext);
-			}, this);
+			SUBS[name] = [];
 		}
-		else
-		{
-			if (Utils.isUnd(this.oSubs[sName]))
+
+		SUBS[name].push([func, context]);
+	}
+}
+
+/**
+ * @param {string} name
+ * @param {Array=} args
+ */
+export function pub(name, args)
+{
+	Plugins.runHook('rl-pub', [name, args]);
+
+	if (!isUnd(SUBS[name]))
+	{
+		_.each(SUBS[name], (items) => {
+			if (items[0])
 			{
-				this.oSubs[sName] = [];
+				items[0].apply(items[1] || null, args || []);
 			}
-
-			this.oSubs[sName].push([fFunc, oContext]);
-		}
-
-		return this;
-	};
-
-	/**
-	 * @param {string} sName
-	 * @param {Array=} aArgs
-	 * @return {Events}
-	 */
-	Events.prototype.pub = function (sName, aArgs)
-	{
-		Plugins.runHook('rl-pub', [sName, aArgs]);
-
-		if (!Utils.isUnd(this.oSubs[sName]))
-		{
-			_.each(this.oSubs[sName], function (aItem) {
-				if (aItem[0])
-				{
-					aItem[0].apply(aItem[1] || null, aArgs || []);
-				}
-			});
-		}
-
-		return this;
-	};
-
-	module.exports = new Events();
-
-}());
+		});
+	}
+}

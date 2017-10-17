@@ -1,32 +1,19 @@
 
-(function () {
+import {AbstractScreen} from 'Knoin/AbstractScreen';
 
-	'use strict';
+import {AboutUserView} from 'View/User/About';
 
-	var
-		_ = require('_'),
+import {getApp} from 'Helper/Apps/User';
 
-		AbstractScreen = require('Knoin/AbstractScreen')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractScreen
-	 */
-	function AboutUserScreen()
-	{
-		AbstractScreen.call(this, 'about', [
-			require('View/User/About')
-		]);
+class AboutUserScreen extends AbstractScreen
+{
+	constructor() {
+		super('about', [AboutUserView]);
 	}
 
-	_.extend(AboutUserScreen.prototype, AbstractScreen.prototype);
+	onShow() {
+		getApp().setWindowTitle('RainLoop');
+	}
+}
 
-	AboutUserScreen.prototype.onShow = function ()
-	{
-		require('App/User').setTitle('RainLoop');
-	};
-
-	module.exports = AboutUserScreen;
-
-}());
+export {AboutUserScreen, AboutUserScreen as default};

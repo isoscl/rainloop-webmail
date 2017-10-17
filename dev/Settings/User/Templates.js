@@ -1,105 +1,80 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {i18n} from 'Common/Translator';
 
-	var
-		ko = require('ko'),
+import TemplateStore from 'Stores/User/Template';
+import Remote from 'Remote/User/Ajax';
 
-		Translator = require('Common/Translator'),
+import {getApp} from 'Helper/Apps/User';
 
-		TemplateStore = require('Stores/User/Template'),
+import {showScreenPopup} from 'Knoin/Knoin';
 
-		Remote = require('Storage/User/Remote')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function TemplatesUserSettings()
-	{
+class TemplatesUserSettings
+{
+	constructor() {
 		this.templates = TemplateStore.templates;
 
-		this.processText = ko.computed(function () {
-			return TemplateStore.templates.loading() ? Translator.i18n('SETTINGS_TEMPLETS/LOADING_PROCESS') : '';
-		}, this);
-
-		this.visibility = ko.computed(function () {
-			return '' === this.processText() ? 'hidden' : 'visible';
-		}, this);
+		this.processText = ko.computed(() => (TemplateStore.templates.loading() ? i18n('SETTINGS_TEMPLETS/LOADING_PROCESS') : ''));
+		this.visibility = ko.computed(() => ('' === this.processText() ? 'hidden' : 'visible'));
 
 		this.templateForDeletion = ko.observable(null).deleteAccessHelper();
 	}
 
-	TemplatesUserSettings.prototype.scrollableOptions = function ()
-	{
+	scrollableOptions(sWrapper) {
 		return {
-			handle: '.drag-handle'
+			handle: '.drag-handle',
+			containment: sWrapper || 'parent',
+			axis: 'y'
 		};
-	};
+	}
 
-	TemplatesUserSettings.prototype.addNewTemplate = function ()
-	{
-		require('Knoin/Knoin').showScreenPopup(require('View/Popup/Template'));
-	};
+	addNewTemplate() {
+		showScreenPopup(require('View/Popup/Template'));
+	}
 
-	TemplatesUserSettings.prototype.editTemplate = function (oTemplateItem)
-	{
+	editTemplate(oTemplateItem) {
 		if (oTemplateItem)
 		{
-			require('Knoin/Knoin').showScreenPopup(require('View/Popup/Template'), [oTemplateItem]);
+			showScreenPopup(require('View/Popup/Template'), [oTemplateItem]);
 		}
-	};
+	}
 
-	/**
-	 * @param {AccountModel} oTemplateToRemove
-	 */
-	TemplatesUserSettings.prototype.deleteTemplate = function (oTemplateToRemove)
-	{
-		if (oTemplateToRemove && oTemplateToRemove.deleteAccess())
+	deleteTemplate(templateToRemove) {
+		if (templateToRemove && templateToRemove.deleteAccess())
 		{
 			this.templateForDeletion(null);
 
-			var
-				self = this,
-				fRemoveAccount = function (oAccount) {
-					return oTemplateToRemove === oAccount;
-				}
-			;
-
-			if (oTemplateToRemove)
+			if (templateToRemove)
 			{
-				this.templates.remove(fRemoveAccount);
+				this.templates.remove((template) => templateToRemove === template);
 
-				Remote.templateDelete(function () {
-					self.reloadTemplates();
-				}, oTemplateToRemove.id);
+				Remote.templateDelete(() => {
+					this.reloadTemplates();
+				}, templateToRemove.id);
 			}
 		}
-	};
+	}
 
-	TemplatesUserSettings.prototype.reloadTemplates = function ()
-	{
-		require('App/User').templates();
-	};
+	reloadTemplates() {
+		getApp().templates();
+	}
 
-	TemplatesUserSettings.prototype.onBuild = function (oDom)
-	{
-		var self = this;
+	onBuild(oDom) {
+
+		const self = this;
 
 		oDom
-			.on('click', '.templates-list .template-item .e-action', function () {
-				var oTemplateItem = ko.dataFor(this);
-				if (oTemplateItem)
+			.on('click', '.templates-list .template-item .e-action', function() { // eslint-disable-line prefer-arrow-callback
+				const template = ko.dataFor(this); // eslint-disable-line no-invalid-this
+				if (template)
 				{
-					self.editTemplate(oTemplateItem);
+					self.editTemplate(template);
 				}
-			})
-		;
+			});
 
 		this.reloadTemplates();
-	};
+	}
+}
 
-	module.exports = TemplatesUserSettings;
-
-}());
+export {TemplatesUserSettings, TemplatesUserSettings as default};

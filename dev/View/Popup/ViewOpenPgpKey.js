@@ -1,59 +1,55 @@
 
-(function () {
+import ko from 'ko';
+import key from 'key';
 
-	'use strict';
+import {KeyState} from 'Common/Enums';
+import {selectElement} from 'Common/Utils';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {popup} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Utils = require('Common/Utils'),
-
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function ViewOpenPgpKeyPopupView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsViewOpenPgpKey');
+@popup({
+	name: 'View/Popup/ViewOpenPgpKey',
+	templateID: 'PopupsViewOpenPgpKey'
+})
+class ViewOpenPgpKeyPopupView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
 		this.key = ko.observable('');
 		this.keyDom = ko.observable(null);
 
-		kn.constructorEnd(this);
+		this.sDefaultKeyScope = KeyState.PopupViewOpenPGP;
 	}
 
-	kn.extendAsViewModel(['View/Popup/ViewOpenPgpKey', 'PopupsViewOpenPgpKeyViewModel'], ViewOpenPgpKeyPopupView);
-	_.extend(ViewOpenPgpKeyPopupView.prototype, AbstractView.prototype);
-
-	ViewOpenPgpKeyPopupView.prototype.clearPopup = function ()
-	{
+	clearPopup() {
 		this.key('');
-	};
+	}
 
-	ViewOpenPgpKeyPopupView.prototype.selectKey = function ()
-	{
-		var oEl = this.keyDom();
-		if (oEl)
+	selectKey() {
+		const el = this.keyDom();
+		if (el)
 		{
-			Utils.selectElement(oEl);
+			selectElement(el);
 		}
-	};
+	}
 
-	ViewOpenPgpKeyPopupView.prototype.onShow = function (oOpenPgpKey)
-	{
+	onShow(openPgpKey) {
 		this.clearPopup();
 
-		if (oOpenPgpKey)
+		if (openPgpKey)
 		{
-			this.key(oOpenPgpKey.armor);
+			this.key(openPgpKey.armor);
 		}
-	};
+	}
 
-	module.exports = ViewOpenPgpKeyPopupView;
+	onBuild() {
+		key('ctrl+a, command+a', KeyState.PopupViewOpenPGP, () => {
+			this.selectKey();
+			return false;
+		});
+	}
+}
 
-}());
+export {ViewOpenPgpKeyPopupView, ViewOpenPgpKeyPopupView as default};

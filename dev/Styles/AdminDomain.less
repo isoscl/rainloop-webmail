@@ -1,3 +1,16 @@
+.b-domain-alias-content {
+	&.modal {
+		width: 330px;
+	}
+	.modal-header {
+		background-color: #fff;
+	}
+
+	.error-desc {
+		color: red;
+	}
+}
+
 .b-domain-content {
 
 	&.modal {
@@ -12,21 +25,34 @@
 		position: relative;
 		overflow: hidden;
 		width: 1600px;
-		height: 370px;
+		height: 400px;
 		left: 0;
 	}
 
 	&.domain-edit .modal-body {
-		height: 320px;
+		height: 340px;
 	}
 
 	&.domain-second-page .modal-body {
 		left: -800px;
 	}
 
+	.domain-desc {
+		color: #666;
+		line-height: 20px;
+		background-color: #f9f9f9;
+		padding: 8px;
+		border: 1px solid #eee;
+		border-radius: 3px;
+		margin: -5px 0;
+		i {
+			font-style: normal;
+			color: red;
+		}
+	}
+
 	.error-desc {
 		color: red;
-		margin-left: 10px;
 	}
 
 	.testing-done {

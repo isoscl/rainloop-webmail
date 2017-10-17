@@ -9,6 +9,10 @@
 	0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); }
 }
 
+@keyframes bounce-me {
+	0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); }
+}
+
 @keyframes textLoadingAnimationKeyFrame {
 	0% { opacity: 1; } 33% { opacity: 0; } 100% { opacity: 1; }
 }
@@ -17,8 +21,19 @@
 	0% {background-position: 0 0;} 100% {background-position: 60px 0;}
 }
 
-html.rl-started-trigger.no-mobile .b-login-content .loginFormWrapper {
+@keyframes login-form-shake  {
+  0% {transform: translateX(0);}
+  12.5% {transform: translateX(-6px) rotateY(-5deg)}
+  37.5% {transform: translateX(5px) rotateY(4deg)}
+  62.5% {transform: translateX(-3px) rotateY(-2deg)}
+  87.5% {transform: translateX(2px) rotateY(1deg)}
+  100% {transform: translateX(0)}
+}
+
+html.csstransitions.rl-started-trigger.no-mobile .b-login-content .loginFormWrapper {
+	/*transform: scale(1.1);*/
 	transform: translateY(-20px);
+	opacity: 0.5;
 }
 
 /*html.rl-started-trigger.no-mobile #rl-content {
@@ -29,39 +44,63 @@ html.rl-started-trigger.no-mobile .b-login-content .loginFormWrapper {
 	.transition(opacity 0.5s linear);
 }
 
-.rl-anim {
+html.csstransitions.rl-started-delay {
 
-	&.csstransitions.no-mobile.rl-started-delay {
-
-		#rl-left {
-			.transition(width 0.3s ease-out);
-		}
-
-		#rl-right {
-			.transition(left 0.3s ease-out);
-		}
-
-		#rl-sub-left, #rl-sub-left .messageList .inputSearch {
-			.transition(width 0.3s ease-out);
-		}
-
-		#rl-sub-right {
-			.transition(left 0.3s ease-out);
-		}
+	#rl-left {
+		.transition(width 0.3s ease-out);
 	}
 
-/*	&.csstransitions.no-mobile #rl-content {
-		.transition(opacity 0.3s ease-out);
-	}*/
-
-	&.csstransitions.no-mobile .b-login-content .loginFormWrapper {
-		.transition(all 0.3s ease-out);
+	#rl-right {
+		.transition(~'left 0.3s ease-out, right 0.3s ease-out');
 	}
 
+	#rl-sub-left, #rl-sub-left .messageList .inputSearch {
+		.transition(width 0.3s ease-out);
+	}
+
+	#rl-sub-right {
+		.transition(left 0.3s ease-out);
+	}
+}
+
+html {
 	&.rgba.cssanimations.backgroundsize .e-strip-animation {
 		background-size: 60px 60px;
 		.rl-strip-animation(0, 0.1);
 		animation: animate-stripes 2s linear infinite;
+	}
+}
+
+html.rl-anim {
+
+	.rl-animated-inited {
+		opacity: 1;
+		.transition(opacity 0.5s linear);
+
+		&.rl-animated-hidden {
+			opacity: 0;
+		}
+	}
+
+	&.cssanimations.csstransitions.no-mobile .b-login-content .errorAnimated {
+		animation: login-form-shake 400ms ease-in-out;
+	}
+
+	&.no-mobile .b-login-content .errorAnimated .buttonLogin {
+		color: #b94a48;
+		font-weight: bold;
+	}
+
+	&.cssanimations.csstransitions.no-mobile .b-login-content .afterLoginHide {
+		opacity: 0;
+	}
+
+	&.csstransitions.no-mobile .btn-group.dropdown.colored-toggle.open .animate-this-icon-on-open {
+		animation: bounce-me .5s linear;
+	}
+
+	&.csstransitions.no-mobile .b-login-content .loginFormWrapper {
+		.transition(all 0.3s ease-out);
 	}
 
 	&.csstransitions .button-delete-transitions {
@@ -108,7 +147,8 @@ html.rl-started-trigger.no-mobile .b-login-content .loginFormWrapper {
 	&.csstransitions .modal.fade {
 
 		.transition(all 200ms ease-out);
-		transform: scale(0.95);
+		/*transform: scale(0.95);*/
+		transform: translateY(-20px);
 
 		&.in {
 			transform: none;

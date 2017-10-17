@@ -1,91 +1,70 @@
 
-(function () {
+import _ from '_';
+import crossroads from 'crossroads';
+import {isArray, isNonEmptyArray, noop} from 'Common/Utils';
 
-	'use strict';
+export class AbstractScreen
+{
+	oCross = null;
+	sScreenName;
+	aViewModels;
 
-	var
-		_ = require('_'),
-		crossroads = require('crossroads'),
-
-		Utils = require('Common/Utils')
-	;
-
-	/**
-	 * @param {string} sScreenName
-	 * @param {?=} aViewModels = []
-	 * @constructor
-	 */
-	function AbstractScreen(sScreenName, aViewModels)
+	constructor(screenName, viewModels = [])
 	{
-		this.sScreenName = sScreenName;
-		this.aViewModels = Utils.isArray(aViewModels) ? aViewModels : [];
+		this.sScreenName = screenName;
+		this.aViewModels = isArray(viewModels) ? viewModels : [];
 	}
 
 	/**
-	 * @type {Array}
+	 * @returns {Array}
 	 */
-	AbstractScreen.prototype.oCross = null;
-
-	/**
-	 * @type {string}
-	 */
-	AbstractScreen.prototype.sScreenName = '';
-
-	/**
-	 * @type {Array}
-	 */
-	AbstractScreen.prototype.aViewModels = [];
-
-	/**
-	 * @return {Array}
-	 */
-	AbstractScreen.prototype.viewModels = function ()
-	{
+	viewModels() {
 		return this.aViewModels;
-	};
+	}
 
 	/**
-	 * @return {string}
+	 * @returns {string}
 	 */
-	AbstractScreen.prototype.screenName = function ()
-	{
+	screenName() {
 		return this.sScreenName;
-	};
-
-	AbstractScreen.prototype.routes = function ()
-	{
-		return null;
-	};
+	}
 
 	/**
-	 * @return {?Object}
+	 * @returns {?Array)}
 	 */
-	AbstractScreen.prototype.__cross = function ()
-	{
+	routes() {
+		return null;
+	}
+
+	/**
+	 * @returns {?Object}
+	 */
+	__cross() {
 		return this.oCross;
-	};
+	}
 
-	AbstractScreen.prototype.__start = function ()
-	{
-		var
-			aRoutes = this.routes(),
-			oRoute = null,
-			fMatcher = null
-		;
+	/**
+	 * @returns {void}
+	 */
+	__start() {
+		let
+			route = null,
+			fMatcher = null;
+		const routes = this.routes();
 
-		if (Utils.isNonEmptyArray(aRoutes))
+		if (isNonEmptyArray(routes))
 		{
-			fMatcher = _.bind(this.onRoute || Utils.emptyFunction, this);
-			oRoute = crossroads.create();
+			fMatcher = _.bind(this.onRoute || noop, this);
+			route = crossroads.create();
 
-			_.each(aRoutes, function (aItem) {
-				oRoute.addRoute(aItem[0], fMatcher).rules = aItem[1];
+			routes.forEach((item) => {
+				if (item && route)
+				{
+					route.addRoute(item[0], fMatcher).rules = item[1];
+				}
 			});
 
-			this.oCross = oRoute;
+			this.oCross = route;
 		}
-	};
-
-	module.exports = AbstractScreen;
-
-}());
+	}
+}

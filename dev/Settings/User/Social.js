@@ -1,20 +1,16 @@
 
-(function () {
+import SocialStore from 'Stores/Social';
 
-	'use strict';
+import {getApp} from 'Helper/Apps/User';
 
-	/**
-	 * @constructor
-	 */
-	function SocialUserSettings()
-	{
-		var
-			Utils = require('Common/Utils'),
-			SocialStore = require('Stores/Social')
-		;
+import {command} from 'Knoin/Knoin';
 
+class SocialUserSettings
+{
+	constructor() {
 		this.googleEnable = SocialStore.google.enabled;
 		this.googleEnableAuth = SocialStore.google.capa.auth;
+		this.googleEnableAuthFast = SocialStore.google.capa.authFast;
 		this.googleEnableDrive = SocialStore.google.capa.drive;
 		this.googleEnablePreview = SocialStore.google.capa.preview;
 
@@ -33,47 +29,46 @@
 		this.twitterActions = SocialStore.twitter.loading;
 		this.twitterLoggined = SocialStore.twitter.loggined;
 		this.twitterUserName = SocialStore.twitter.userName;
-
-		this.connectGoogle = Utils.createCommand(this, function () {
-			if (!this.googleLoggined())
-			{
-				require('App/User').googleConnect();
-			}
-		}, function () {
-			return !this.googleLoggined() && !this.googleActions();
-		});
-
-		this.disconnectGoogle = Utils.createCommand(this, function () {
-			require('App/User').googleDisconnect();
-		});
-
-		this.connectFacebook = Utils.createCommand(this, function () {
-			if (!this.facebookLoggined())
-			{
-				require('App/User').facebookConnect();
-			}
-		}, function () {
-			return !this.facebookLoggined() && !this.facebookActions();
-		});
-
-		this.disconnectFacebook = Utils.createCommand(this, function () {
-			require('App/User').facebookDisconnect();
-		});
-
-		this.connectTwitter = Utils.createCommand(this, function () {
-			if (!this.twitterLoggined())
-			{
-				require('App/User').twitterConnect();
-			}
-		}, function () {
-			return !this.twitterLoggined() && !this.twitterActions();
-		});
-
-		this.disconnectTwitter = Utils.createCommand(this, function () {
-			require('App/User').twitterDisconnect();
-		});
 	}
 
-	module.exports = SocialUserSettings;
+	@command((self) => !self.googleLoggined() && !self.googleActions())
+	connectGoogleCommand() {
+		if (!this.googleLoggined())
+		{
+			getApp().googleConnect();
+		}
+	}
 
-}());
+	@command()
+	disconnectGoogleCommand() {
+		getApp().googleDisconnect();
+	}
+
+	@command((self) => !self.facebookLoggined() && !self.facebookActions())
+	connectFacebookCommand() {
+		if (!this.facebookLoggined())
+		{
+			getApp().facebookConnect();
+		}
+	}
+
+	@command()
+	disconnectFacebookCommand() {
+		getApp().facebookDisconnect();
+	}
+
+	@command((self) => !self.twitterLoggined() && !self.twitterActions())
+	connectTwitterCommand() {
+		if (!this.twitterLoggined())
+		{
+			getApp().twitterConnect();
+		}
+	}
+
+	@command()
+	disconnectTwitterCommand() {
+		getApp().twitterDisconnect();
+	}
+}
+
+export {SocialUserSettings, SocialUserSettings as default};

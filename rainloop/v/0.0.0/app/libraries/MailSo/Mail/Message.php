@@ -160,17 +160,12 @@ class Message
 	/**
 	 * @var array
 	 */
+	private $aUnsubsribeLinks;
+
+	/**
+	 * @var array
+	 */
 	private $aThreads;
-
-	/**
-	 * @var int
-	 */
-	private $iParentThread;
-
-	/**
-	 * @var int
-	 */
-	private $iThreadsLen;
 
 	/**
 	 * @var bool
@@ -233,6 +228,7 @@ class Message
 
 		$this->sInReplyTo = '';
 		$this->sReferences = '';
+		$this->aUnsubsribeLinks = array();
 
 		$this->iSensitivity = \MailSo\Mime\Enumerations\Sensitivity::NOTHING;
 		$this->iPriority = \MailSo\Mime\Enumerations\MessagePriority::NORMAL;
@@ -240,8 +236,6 @@ class Message
 		$this->sReadReceipt = '';
 
 		$this->aThreads = array();
-		$this->iThreadsLen = 0;
-		$this->iParentThread = 0;
 
 		$this->bTextPartIsTrimmed = false;
 
@@ -511,6 +505,14 @@ class Message
 	}
 
 	/**
+	 * @return array
+	 */
+	public function UnsubsribeLinks()
+	{
+		return $this->aUnsubsribeLinks;
+	}
+
+	/**
 	 * @return string
 	 */
 	public function ReadingConfirmation()
@@ -540,38 +542,6 @@ class Message
 	public function SetThreads($aThreads)
 	{
 		$this->aThreads = \is_array($aThreads) ? $aThreads : array();
-	}
-
-	/**
-	 * @return int
-	 */
-	public function ThreadsLen()
-	{
-		return $this->iThreadsLen;
-	}
-
-	/**
-	 * @param int $iThreadsLen
-	 */
-	public function SetThreadsLen($iThreadsLen)
-	{
-		$this->iThreadsLen = $iThreadsLen;
-	}
-
-	/**
-	 * @return int
-	 */
-	public function ParentThread()
-	{
-		return $this->iParentThread;
-	}
-
-	/**
-	 * @param int $iParentThread
-	 */
-	public function SetParentThread($iParentThread)
-	{
-		$this->iParentThread = $iParentThread;
 	}
 
 	/**
@@ -664,7 +634,8 @@ class Message
 			$this->oDeliveredTo = $oHeaders->GetAsEmailCollection(\MailSo\Mime\Enumerations\Header::DELIVERED_TO, $bCharsetAutoDetect);
 
 			$this->sInReplyTo = $oHeaders->ValueByName(\MailSo\Mime\Enumerations\Header::IN_REPLY_TO);
-			$this->sReferences = $oHeaders->ValueByName(\MailSo\Mime\Enumerations\Header::REFERENCES);
+			$this->sReferences = \MailSo\Base\Utils::StripSpaces(
+				$oHeaders->ValueByName(\MailSo\Mime\Enumerations\Header::REFERENCES));
 
 			$sHeaderDate = $oHeaders->ValueByName(\MailSo\Mime\Enumerations\Header::DATE);
 			$this->sHeaderDate = $sHeaderDate;
@@ -727,6 +698,23 @@ class Message
 			if (empty($this->sReadReceipt))
 			{
 				$this->sReadReceipt = \trim($oHeaders->ValueByName(\MailSo\Mime\Enumerations\Header::X_CONFIRM_READING_TO));
+			}
+
+			//Unsubscribe links
+			$this->aUnsubsribeLinks = $oHeaders->ValueByName(\MailSo\Mime\Enumerations\Header::LIST_UNSUBSCRIBE);
+			if (empty($this->aUnsubsribeLinks))
+			{
+				$this->aUnsubsribeLinks = array();
+			}
+			else
+			{
+				$this->aUnsubsribeLinks = explode(',', $this->aUnsubsribeLinks);
+				$this->aUnsubsribeLinks = array_map(
+					function ($link) {
+						return trim($link, ' <>');
+					},
+					$this->aUnsubsribeLinks
+				);
 			}
 
 			$sDraftInfo = $oHeaders->ValueByName(\MailSo\Mime\Enumerations\Header::X_DRAFT_INFO);
@@ -794,8 +782,8 @@ class Message
 				$sCharset = \MailSo\Base\Enumerations\Charset::UTF_8;
 			}
 
-			$sHtmlParts = array();
-			$sPlainParts = array();
+			$aHtmlParts = array();
+			$aPlainParts = array();
 
 			foreach ($aTextParts as $oPart)
 			{
@@ -825,22 +813,27 @@ class Message
 
 					if ('text/html' === $oPart->ContentType())
 					{
-						$sHtmlParts[] = $sText;
+						$aHtmlParts[] = $sText;
 					}
 					else
 					{
-						$sPlainParts[] = $sText;
+						if ($oPart->IsFlowedFormat())
+						{
+							$sText = \MailSo\Base\Utils::DecodeFlowedFormat($sText);
+						}
+
+						$aPlainParts[] = $sText;
 					}
 				}
 			}
 
-			if (0 < \count($sHtmlParts))
+			if (0 < \count($aHtmlParts))
 			{
-				$this->sHtml = \implode('<br />', $sHtmlParts);
+				$this->sHtml = \implode('<br />', $aHtmlParts);
 			}
 			else
 			{
-				$this->sPlain = \trim(\implode("\n", $sPlainParts));
+				$this->sPlain = \trim(\implode("\n", $aPlainParts));
 			}
 
 			$aMatch = array();
@@ -856,7 +849,7 @@ class Message
 				$this->bPgpEncrypted = true;
 			}
 
-			unset($sHtmlParts, $sPlainParts, $aMatch);
+			unset($aHtmlParts, $aPlainParts, $aMatch);
 		}
 
 //		if (empty($this->sPgpSignature) && 'multipart/signed' === \strtolower($this->sContentType) &&

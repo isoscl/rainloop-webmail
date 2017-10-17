@@ -280,20 +280,37 @@ class Http
 	}
 
 	/**
+	 * @param bool $bCheckProxy = true
+	 *
 	 * @return string
 	 */
-	public function GetScheme()
+	public function GetScheme($bCheckProxy = true)
 	{
-		$sHttps = \strtolower($this->GetServer('HTTPS', ''));
-		return ('on' === $sHttps || ('' === $sHttps && '443' === (string) $this->GetServer('SERVER_PORT', ''))) ? 'https' : 'http';
+		return $this->IsSecure($bCheckProxy) ? 'https' : 'http';
 	}
 
 	/**
+	 * @param bool $bCheckProxy = true
+	 *
 	 * @return bool
 	 */
-	public function IsSecure()
+	public function IsSecure($bCheckProxy = true)
 	{
-		return ('https' === $this->GetScheme());
+		$sHttps = \strtolower($this->GetServer('HTTPS', ''));
+		if ('on' === $sHttps || ('' === $sHttps && '443' === (string) $this->GetServer('SERVER_PORT', '')))
+		{
+			return true;
+		}
+
+		if ($bCheckProxy && (
+			('https' === \strtolower($this->GetServer('HTTP_X_FORWARDED_PROTO', ''))) ||
+			('on' === \strtolower($this->GetServer('HTTP_X_FORWARDED_SSL', '')))
+		))
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
@@ -308,12 +325,10 @@ class Http
 		$sHost = $this->GetServer('HTTP_HOST', '');
 		if (0 === \strlen($sHost))
 		{
-			$sScheme = $this->GetScheme();
 			$sName = $this->GetServer('SERVER_NAME');
-			$iPort = (int) $this->GetServer('SERVER_PORT');
+			$iPort = (int) $this->GetServer('SERVER_PORT', 80);
 
-			$sHost = (('http' === $sScheme && 80 === $iPort) || ('https' === $sScheme && 443 === $iPort))
-				? $sName : $sName.':'.$iPort;
+			$sHost = (\in_array($iPort, array(80, 433))) ? $sName : $sName.':'.$iPort;
 		}
 
 		if ($bWithoutWWW)
@@ -552,6 +567,12 @@ class Http
 			return false;
 		}
 
+		$sUrl = \trim($sUrl);
+		if ('//' === substr($sUrl, 0, 2))
+		{
+			$sUrl = 'http:'.$sUrl;
+		}
+
 		$aOptions = array(
 			CURLOPT_URL => $sUrl,
 			CURLOPT_HEADER => false,
@@ -664,10 +685,10 @@ class Http
 			{
 				if ($bSetCacheHeader)
 				{
-					\header('Cache-Control: public', true);
-					\header('Pragma: public', true);
-					\header('Last-Modified: '.\gmdate('D, d M Y H:i:s', $iUtcTimeStamp - $iExpireTime).' UTC', true);
-					\header('Expires: '.\gmdate('D, j M Y H:i:s', $iUtcTimeStamp + $iExpireTime).' UTC', true);
+					@\header('Cache-Control: public', true);
+					@\header('Pragma: public', true);
+					@\header('Last-Modified: '.\gmdate('D, d M Y H:i:s', $iUtcTimeStamp - $iExpireTime).' UTC', true);
+					@\header('Expires: '.\gmdate('D, j M Y H:i:s', $iUtcTimeStamp + $iExpireTime).' UTC', true);
 
 					if (0 < strlen($sEtag))
 					{
@@ -686,7 +707,7 @@ class Http
 	}
 
 	/**
-	 * @staticvar bool $bCache
+	 * @staticvar boolean $bCache
 	 */
 	public function ServerNoCache()
 	{
@@ -699,12 +720,11 @@ class Http
 			@\header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 			@\header('Cache-Control: post-check=0, pre-check=0', false);
 			@\header('Pragma: no-cache');
-			@\header('X-RainLoop-Cache: no');
 		}
 	}
 
 	/**
-	 * @staticvar bool $bCache
+	 * @staticvar boolean $bCache
 	 * @param string $sEtag
 	 * @param int $iLastModified
 	 * @param int $iExpires
@@ -719,7 +739,6 @@ class Http
 			@\header('ETag: '.$sEtag, true);
 			@\header('Last-Modified: '.\gmdate('D, d M Y H:i:s', $iLastModified).' UTC', true);
 			@\header('Expires: '.\gmdate('D, j M Y H:i:s', $iExpires).' UTC', true);
-			@\header('X-RainLoop-Cache: yes');
 		}
 	}
 
@@ -734,14 +753,16 @@ class Http
 		if (99 < $iStatus)
 		{
 			$aStatus = array(
+				200 => 'OK',
+				206 => 'Partial Content',
 				301 => 'Moved Permanently',
 				304 => 'Not Modified',
-				200 => 'OK',
 				400 => 'Bad Request',
 				401 => 'Unauthorized',
 				403 => 'Forbidden',
 				404 => 'Not Found',
-				405 => 'Method Not Allowed'
+				405 => 'Method Not Allowed',
+				416 => 'Requested range not satisfiable'
 			);
 
 			$sCustomStatusText = \trim($sCustomStatusText);

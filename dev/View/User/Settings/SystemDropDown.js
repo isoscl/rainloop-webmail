@@ -1,28 +1,12 @@
 
-(function () {
+import {view, ViewType} from 'Knoin/Knoin';
+import {AbstractSystemDropDownUserView} from 'View/User/AbstractSystemDropDown';
 
-	'use strict';
+@view({
+	name: 'View/User/Settings/SystemDropDown',
+	type: ViewType.Right,
+	templateID: 'SystemDropDown'
+})
+class SystemDropDownSettingsUserView extends AbstractSystemDropDownUserView {}
 
-	var
-		_ = require('_'),
-
-		kn = require('Knoin/Knoin'),
-		AbstractSystemDropDownUserView = require('View/User/AbstractSystemDropDown')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractSystemDropDownUserView
-	 */
-	function SystemDropDownSettingsUserView()
-	{
-		AbstractSystemDropDownUserView.call(this);
-		kn.constructorEnd(this);
-	}
-
-	kn.extendAsViewModel(['View/User/Settings/SystemDropDown', 'View/App/Settings/SystemDropDown', 'SettingsSystemDropDownViewModel'], SystemDropDownSettingsUserView);
-	_.extend(SystemDropDownSettingsUserView.prototype, AbstractSystemDropDownUserView.prototype);
-
-	module.exports = SystemDropDownSettingsUserView;
-
-}());
+export {SystemDropDownSettingsUserView, SystemDropDownSettingsUserView as default};

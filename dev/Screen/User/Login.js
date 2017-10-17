@@ -1,32 +1,19 @@
 
-(function () {
+import {AbstractScreen} from 'Knoin/AbstractScreen';
 
-	'use strict';
+import {LoginUserView} from 'View/User/Login';
 
-	var
-		_ = require('_'),
+import {getApp} from 'Helper/Apps/User';
 
-		AbstractScreen = require('Knoin/AbstractScreen')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractScreen
-	 */
-	function LoginUserScreen()
-	{
-		AbstractScreen.call(this, 'login', [
-			require('View/User/Login')
-		]);
+class LoginUserScreen extends AbstractScreen
+{
+	constructor() {
+		super('login', [LoginUserView]);
 	}
 
-	_.extend(LoginUserScreen.prototype, AbstractScreen.prototype);
+	onShow() {
+		getApp().setWindowTitle('');
+	}
+}
 
-	LoginUserScreen.prototype.onShow = function ()
-	{
-		require('App/User').setTitle('');
-	};
-
-	module.exports = LoginUserScreen;
-
-}());
+export {LoginUserScreen, LoginUserScreen as default};

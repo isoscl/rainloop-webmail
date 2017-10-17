@@ -1,32 +1,21 @@
 
-(function () {
+import {AbstractScreen} from 'Knoin/AbstractScreen';
 
-	'use strict';
+import {getApp} from 'Helper/Apps/Admin';
 
-	var
-		_ = require('_'),
+import {LoginAdminView} from 'View/Admin/Login';
 
-		AbstractScreen = require('Knoin/AbstractScreen')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractScreen
-	 */
-	function LoginAdminScreen()
-	{
-		AbstractScreen.call(this, 'login', [
-			require('View/Admin/Login')
+class LoginAdminScreen extends AbstractScreen
+{
+	constructor() {
+		super('login', [
+			LoginAdminView
 		]);
 	}
 
-	_.extend(LoginAdminScreen.prototype, AbstractScreen.prototype);
+	onShow() {
+		getApp().setWindowTitle('');
+	}
+}
 
-	LoginAdminScreen.prototype.onShow = function ()
-	{
-		require('App/Admin').setTitle('');
-	};
-
-	module.exports = LoginAdminScreen;
-
-}());
+export {LoginAdminScreen, LoginAdminScreen as default};

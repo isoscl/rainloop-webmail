@@ -1,50 +1,87 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {isNonEmptyArray, log} from 'Common/Utils';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-		AbstractModel = require('Knoin/AbstractModel')
-	;
+import PgpStore from 'Stores/User/Pgp';
 
+class OpenPgpKeyModel extends AbstractModel
+{
 	/**
-	 * @param {string} iIndex
-	 * @param {string} sGuID
-	 * @param {string} sID
-	 * @param {string} sUserID
-	 * @param {string} sEmail
-	 * @param {boolean} bIsPrivate
-	 * @param {string} sArmor
-	 * @constructor
+	 * @param {string} index
+	 * @param {string} guID
+	 * @param {string} ID
+	 * @param {array} IDs
+	 * @param {array} userIDs
+	 * @param {array} emails
+	 * @param {boolean} isPrivate
+	 * @param {string} armor
+	 * @param {string} userID
 	 */
-	function OpenPgpKeyModel(iIndex, sGuID, sID, sUserID, sEmail, bIsPrivate, sArmor)
+	constructor(index, guID, ID, IDs, userIDs, emails, isPrivate, armor, userID)
 	{
-		AbstractModel.call(this, 'OpenPgpKeyModel');
+		super('OpenPgpKeyModel');
 
-		this.index = iIndex;
-		this.id = sID;
-		this.guid = sGuID;
-		this.user = sUserID;
-		this.email = sEmail;
-		this.armor = sArmor;
-		this.isPrivate = !!bIsPrivate;
+		this.index = index;
+		this.id = ID;
+		this.ids = isNonEmptyArray(IDs) ? IDs : [ID];
+		this.guid = guID;
+		this.user = '';
+		this.users = userIDs;
+		this.email = '';
+		this.emails = emails;
+		this.armor = armor;
+		this.isPrivate = !!isPrivate;
+
+		this.selectUser(userID);
 
 		this.deleteAccess = ko.observable(false);
 	}
 
-	_.extend(OpenPgpKeyModel.prototype, AbstractModel.prototype);
+	getNativeKey() {
+		let key = null;
+		try
+		{
+			key = PgpStore.openpgp.key.readArmored(this.armor);
+			if (key && !key.err && key.keys && key.keys[0])
+			{
+				return key;
+			}
+		}
+		catch (e)
+		{
+			log(e);
+		}
 
-	OpenPgpKeyModel.prototype.index = 0;
-	OpenPgpKeyModel.prototype.id = '';
-	OpenPgpKeyModel.prototype.guid = '';
-	OpenPgpKeyModel.prototype.user = '';
-	OpenPgpKeyModel.prototype.email = '';
-	OpenPgpKeyModel.prototype.armor = '';
-	OpenPgpKeyModel.prototype.isPrivate = false;
+		return null;
+	}
 
-	module.exports = OpenPgpKeyModel;
+	getNativeKeys() {
+		const key = this.getNativeKey();
+		return key && key.keys ? key.keys : null;
+	}
 
-}());
+	select(pattern, property) {
+		if (this[property])
+		{
+			const index = this[property].indexOf(pattern);
+			if (-1 !== index)
+			{
+				this.user = this.users[index];
+				this.email = this.emails[index];
+			}
+		}
+	}
+
+	selectUser(user) {
+		this.select(user, 'users');
+	}
+
+	selectEmail(email) {
+		this.select(email, 'emails');
+	}
+}
+
+export {OpenPgpKeyModel, OpenPgpKeyModel as default};

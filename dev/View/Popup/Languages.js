@@ -1,82 +1,76 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {convertLangName} from 'Common/Utils';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+// import {view, ViewType} from 'Knoin/Knoin';
+import {popup} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Utils = require('Common/Utils'),
+@popup({
+	name: 'View/Popup/Languages',
+	templateID: 'PopupsLanguages'
+})
+class LanguagesPopupView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
+		this.fLang = null;
+		this.userLanguage = ko.observable('');
 
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function LanguagesPopupView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsLanguages');
+		this.langs = ko.observableArray([]);
 
-		this.LanguageStore = require('Stores/Language');
+		this.languages = ko.computed(() => {
+			const userLanguage = this.userLanguage();
+			return _.map(this.langs(), (language) => ({
+				key: language,
+				user: language === userLanguage,
+				selected: ko.observable(false),
+				fullName: convertLangName(language)
+			}));
+		});
 
-		this.exp = ko.observable(false);
-
-		this.languages = ko.computed(function () {
-			return _.map(this.LanguageStore.languages(), function (sLanguage) {
-				return {
-					'key': sLanguage,
-					'selected': ko.observable(false),
-					'fullName': Utils.convertLangName(sLanguage)
-				};
-			});
-		}, this);
-
-		this.LanguageStore.language.subscribe(function () {
-			this.resetMainLanguage();
-		}, this);
-
-		kn.constructorEnd(this);
+		this.langs.subscribe(() => {
+			this.setLanguageSelection();
+		});
 	}
 
-	kn.extendAsViewModel(['View/Popup/Languages', 'PopupsLanguagesViewModel'], LanguagesPopupView);
-	_.extend(LanguagesPopupView.prototype, AbstractView.prototype);
+	languageTooltipName(language) {
+		const result = convertLangName(language, true);
+		return convertLangName(language, false) === result ? '' : result;
+	}
 
-	LanguagesPopupView.prototype.languageEnName = function (sLanguage)
-	{
-		var sResult = Utils.convertLangName(sLanguage, true);
-		return 'English' === sResult ? '' : sResult;
-	};
-
-	LanguagesPopupView.prototype.resetMainLanguage = function ()
-	{
-		var sCurrent = this.LanguageStore.language();
-		_.each(this.languages(), function (oItem) {
-			oItem['selected'](oItem['key'] === sCurrent);
+	setLanguageSelection() {
+		const currentLang = this.fLang ? ko.unwrap(this.fLang) : '';
+		_.each(this.languages(), (item) => {
+			item.selected(item.key === currentLang);
 		});
-	};
+	}
 
-	LanguagesPopupView.prototype.onShow = function ()
-	{
-		this.exp(true);
+	onBeforeShow() {
+		this.fLang = null;
+		this.userLanguage('');
 
-		this.resetMainLanguage();
-	};
+		this.langs([]);
+	}
 
-	LanguagesPopupView.prototype.onHide = function ()
-	{
-		this.exp(false);
-	};
+	onShow(fLanguage, langs, userLanguage) {
+		this.fLang = fLanguage;
+		this.userLanguage(userLanguage || '');
 
-	LanguagesPopupView.prototype.changeLanguage = function (sLang)
-	{
-		this.LanguageStore.language(sLang);
+		this.langs(langs);
+	}
+
+	changeLanguage(lang) {
+		if (this.fLang)
+		{
+			this.fLang(lang);
+		}
+
 		this.cancelCommand();
-	};
+	}
+}
 
-	module.exports = LanguagesPopupView;
-
-}());
+export {LanguagesPopupView, LanguagesPopupView as default};

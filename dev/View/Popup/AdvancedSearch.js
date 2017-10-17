@@ -1,28 +1,24 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {trim} from 'Common/Utils';
+import {i18n, trigger as translatorTrigger} from 'Common/Translator';
+import {searchSubtractFormatDateHelper} from 'Common/Momentor';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
-		moment = require('moment'),
+import MessageStore from 'Stores/User/Message';
 
-		Utils = require('Common/Utils'),
+import {popup, command} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Data = require('Storage/User/Data'),
-
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function AdvancedSearchPopupView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsAdvancedSearch');
+@popup({
+	name: 'View/Popup/AdvancedSearch',
+	templateID: 'PopupsAdvancedSearch'
+})
+class AdvancedSearchPopupView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
 		this.fromFocus = ko.observable(false);
 
@@ -36,100 +32,122 @@
 		this.starred = ko.observable(false);
 		this.unseen = ko.observable(false);
 
-		this.searchCommand = Utils.createCommand(this, function () {
-
-			var sSearch = this.buildSearchString();
-			if ('' !== sSearch)
-			{
-				Data.mainMessageListSearch(sSearch);
-			}
-
-			this.cancelCommand();
+		this.selectedDates = ko.computed(() => {
+			translatorTrigger();
+			return [
+				{id: -1, name: i18n('SEARCH/LABEL_ADV_DATE_ALL')},
+				{id: 3, name: i18n('SEARCH/LABEL_ADV_DATE_3_DAYS')},
+				{id: 7, name: i18n('SEARCH/LABEL_ADV_DATE_7_DAYS')},
+				{id: 30, name: i18n('SEARCH/LABEL_ADV_DATE_MONTH')},
+				{id: 90, name: i18n('SEARCH/LABEL_ADV_DATE_3_MONTHS')},
+				{id: 180, name: i18n('SEARCH/LABEL_ADV_DATE_6_MONTHS')},
+				{id: 365, name: i18n('SEARCH/LABEL_ADV_DATE_YEAR')}
+			];
 		});
-
-		kn.constructorEnd(this);
 	}
 
-	kn.extendAsViewModel(['View/Popup/AdvancedSearch', 'PopupsAdvancedSearchViewModel'], AdvancedSearchPopupView);
-	_.extend(AdvancedSearchPopupView.prototype, AbstractView.prototype);
-
-	AdvancedSearchPopupView.prototype.buildSearchStringValue = function (sValue)
-	{
-		if (-1 < sValue.indexOf(' '))
+	@command()
+	searchCommand() {
+		const search = this.buildSearchString();
+		if ('' !== search)
 		{
-			sValue = '"' + sValue + '"';
+			MessageStore.mainMessageListSearch(search);
 		}
 
-		return sValue;
-	};
+		this.cancelCommand();
+	}
 
-	AdvancedSearchPopupView.prototype.buildSearchString = function ()
-	{
-		var
-			aResult = [],
-			sFrom = Utils.trim(this.from()),
-			sTo = Utils.trim(this.to()),
-			sSubject = Utils.trim(this.subject()),
-			sText = Utils.trim(this.text()),
-			aIs = [],
-			aHas = []
-		;
+	parseSearchStringValue(search) {
+		const parts = (search || '').split(/[\s]+/g);
+		_.each(parts, (part) => {
+			switch (part)
+			{
+				case 'has:attachment':
+					this.hasAttachment(true);
+					break;
+				case 'is:unseen,flagged':
+					this.starred(true);
+					/* falls through */
+				case 'is:unseen':
+					this.unseen(true);
+					break;
+				// no default
+			}
+		});
+	}
 
-		if (sFrom && '' !== sFrom)
+	buildSearchStringValue(value) {
+		if (-1 < value.indexOf(' '))
 		{
-			aResult.push('from:' + this.buildSearchStringValue(sFrom));
+			value = '"' + value + '"';
+		}
+		return value;
+	}
+
+	buildSearchString() {
+		const
+			result = [],
+			from_ = trim(this.from()),
+			to = trim(this.to()),
+			subject = trim(this.subject()),
+			text = trim(this.text()),
+			isPart = [],
+			hasPart = [];
+
+		if (from_ && '' !== from_)
+		{
+			result.push('from:' + this.buildSearchStringValue(from_));
 		}
 
-		if (sTo && '' !== sTo)
+		if (to && '' !== to)
 		{
-			aResult.push('to:' + this.buildSearchStringValue(sTo));
+			result.push('to:' + this.buildSearchStringValue(to));
 		}
 
-		if (sSubject && '' !== sSubject)
+		if (subject && '' !== subject)
 		{
-			aResult.push('subject:' + this.buildSearchStringValue(sSubject));
+			result.push('subject:' + this.buildSearchStringValue(subject));
 		}
 
 		if (this.hasAttachment())
 		{
-			aHas.push('attachment');
+			hasPart.push('attachment');
 		}
 
 		if (this.unseen())
 		{
-			aIs.push('unseen');
+			isPart.push('unseen');
 		}
 
 		if (this.starred())
 		{
-			aIs.push('flagged');
+			isPart.push('flagged');
 		}
 
-		if (0 < aHas.length)
+		if (0 < hasPart.length)
 		{
-			aResult.push('has:' + aHas.join(','));
+			result.push('has:' + hasPart.join(','));
 		}
 
-		if (0 < aIs.length)
+		if (0 < isPart.length)
 		{
-			aResult.push('is:' + aIs.join(','));
+			result.push('is:' + isPart.join(','));
 		}
 
 		if (-1 < this.selectedDateValue())
 		{
-			aResult.push('date:' + moment().subtract('days', this.selectedDateValue()).format('YYYY.MM.DD') + '/');
+			result.push('date:' + searchSubtractFormatDateHelper(this.selectedDateValue()) + '/');
 		}
 
-		if (sText && '' !== sText)
+		if (text && '' !== text)
 		{
-			aResult.push('text:' + this.buildSearchStringValue(sText));
+			result.push('text:' + this.buildSearchStringValue(text));
 		}
 
-		return Utils.trim(aResult.join(' '));
-	};
+		return trim(result.join(' '));
+	}
 
-	AdvancedSearchPopupView.prototype.clearPopup = function ()
-	{
+	clearPopup() {
 		this.from('');
 		this.to('');
 		this.subject('');
@@ -141,18 +159,16 @@
 		this.unseen(false);
 
 		this.fromFocus(true);
-	};
+	}
 
-	AdvancedSearchPopupView.prototype.onShow = function ()
-	{
+	onShow(search) {
 		this.clearPopup();
-	};
+		this.parseSearchStringValue(search);
+	}
 
-	AdvancedSearchPopupView.prototype.onFocus = function ()
-	{
+	onShowWithDelay() {
 		this.fromFocus(true);
-	};
+	}
+}
 
-	module.exports = AdvancedSearchPopupView;
-
-}());
+export {AdvancedSearchPopupView, AdvancedSearchPopupView as default};

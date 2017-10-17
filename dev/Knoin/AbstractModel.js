@@ -1,50 +1,33 @@
 
-(function () {
+import {isArray, disposeObject} from 'Common/Utils';
 
-	'use strict';
-
-	var
-		_ = require('_'),
-
-		Utils = require('Common/Utils')
-	;
+export class AbstractModel
+{
+	sModelName = '';
+	disposables = [];
 
 	/**
-	 * @constructor
-	 *
-	 * @param {string} sModelName
+	 * @param {string} modelName = ''
 	 */
-	function AbstractModel(sModelName)
+	constructor(modelName = '')
 	{
-		this.sModelName = sModelName || '';
-		this.disposables = [];
+		this.sModelName = modelName || '';
 	}
 
-	/**
-	 * @param {Array|Object} mInputValue
-	 */
-	AbstractModel.prototype.regDisposables = function (mInputValue)
-	{
-		if (Utils.isArray(mInputValue))
+	regDisposables(value) {
+		if (isArray(value))
 		{
-			_.each(mInputValue, function (mValue) {
-				this.disposables.push(mValue);
-			}, this);
+			value.forEach((item) => {
+				this.disposables.push(item);
+			});
 		}
-		else if (mInputValue)
+		else if (value)
 		{
-			this.disposables.push(mInputValue);
+			this.disposables.push(value);
 		}
+	}
 
-	};
-
-	AbstractModel.prototype.onDestroy = function ()
-	{
-		Utils.disposeObject(this);
-//		window.console.log('onDestroy: ' + this.sModelName); // TODO
-	};
-
-	module.exports = AbstractModel;
-
-}());
-
+	onDestroy()	{
+		disposeObject(this);
+	}
+}

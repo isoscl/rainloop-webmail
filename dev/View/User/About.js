@@ -1,34 +1,22 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import * as Settings from 'Storage/Settings';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {view, ViewType} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Settings = require('Storage/Settings'),
-
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function AboutUserView()
-	{
-		AbstractView.call(this, 'Center', 'About');
-
-		this.version = ko.observable(Settings.settingsGet('Version'));
-
-		kn.constructorEnd(this);
+@view({
+	name: 'View/User/About',
+	type: ViewType.Center,
+	templateID: 'About'
+})
+class AboutUserView extends AbstractViewNext
+{
+	constructor() {
+		super();
+		this.version = ko.observable(Settings.appSettingsGet('version'));
 	}
+}
 
-	kn.extendAsViewModel(['View/User/About', 'View/App/About', 'AboutViewModel'], AboutUserView);
-	_.extend(AboutUserView.prototype, AbstractView.prototype);
-
-	module.exports = AboutUserView;
-
-}());
+export {AboutUserView, AboutUserView as default};

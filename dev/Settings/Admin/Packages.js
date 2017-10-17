@@ -1,113 +1,90 @@
 
-(function () {
+import window from 'window';
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {StorageResultType, Notification} from 'Common/Enums';
+import {getNotification} from 'Common/Translator';
 
-	var
-		window = require('window'),
-		_ = require('_'),
-		ko = require('ko'),
+import PackageStore from 'Stores/Admin/Package';
+import Remote from 'Remote/Admin/Ajax';
 
-		Enums = require('Common/Enums'),
-		Translator = require('Common/Translator'),
+import {getApp} from 'Helper/Apps/Admin';
 
-		PackageStore = require('Stores/Admin/Package'),
-		Remote = require('Storage/Admin/Remote')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function PackagesAdminSettings()
-	{
+class PackagesAdminSettings
+{
+	constructor() {
 		this.packagesError = ko.observable('');
 
 		this.packages = PackageStore.packages;
 		this.packagesReal = PackageStore.packagesReal;
 		this.packagesMainUpdatable = PackageStore.packagesMainUpdatable;
 
-		this.packagesCurrent = this.packages.filter(function (oItem) {
-			return oItem && '' !== oItem['installed'] && !oItem['compare'];
-		});
+		this.packagesCurrent = this.packages.filter((item) => item && '' !== item.installed && !item.compare);
+		this.packagesAvailableForUpdate = this.packages.filter((item) => item && '' !== item.installed && !!item.compare);
+		this.packagesAvailableForInstallation = this.packages.filter((item) => item && '' === item.installed);
 
-		this.packagesAvailableForUpdate = this.packages.filter(function (oItem) {
-			return oItem && '' !== oItem['installed'] && !!oItem['compare'];
-		});
-
-		this.packagesAvailableForInstallation = this.packages.filter(function (oItem) {
-			return oItem && '' === oItem['installed'];
-		});
-
-		this.visibility = ko.computed(function () {
-			return PackageStore.packages.loading() ? 'visible' : 'hidden';
-		}, this);
+		this.visibility = ko.computed(() => (PackageStore.packages.loading() ? 'visible' : 'hidden'));
 	}
 
-	PackagesAdminSettings.prototype.onShow = function ()
-	{
+	onShow() {
 		this.packagesError('');
-	};
+	}
 
-	PackagesAdminSettings.prototype.onBuild = function ()
-	{
-		require('App/Admin').reloadPackagesList();
-	};
+	onBuild() {
+		getApp().reloadPackagesList();
+	}
 
-	PackagesAdminSettings.prototype.requestHelper = function (oPackage, bInstall)
-	{
-		var self = this;
-		return function (sResult, oData) {
+	requestHelper(packageToRequest, install) {
+		return (result, data) => {
 
-			if (Enums.StorageResultType.Success !== sResult || !oData || !oData.Result)
+			if (StorageResultType.Success !== result || !data || !data.Result)
 			{
-				if (oData && oData.ErrorCode)
+				if (data && data.ErrorCode)
 				{
-					self.packagesError(Translator.getNotification(oData.ErrorCode));
+					this.packagesError(getNotification(data.ErrorCode));
 				}
 				else
 				{
-					self.packagesError(Translator.getNotification(
-						bInstall ? Enums.Notification.CantInstallPackage : Enums.Notification.CantDeletePackage));
+					this.packagesError(getNotification(
+						install ? Notification.CantInstallPackage : Notification.CantDeletePackage));
 				}
 			}
 
-			_.each(self.packages(), function (oItem) {
-				if (oItem && oPackage && oItem['loading']() && oPackage['file'] === oItem['file'])
+			_.each(this.packages(), (item) => {
+				if (item && packageToRequest && item.loading && item.loading() && packageToRequest.file === item.file)
 				{
-					oPackage['loading'](false);
-					oItem['loading'](false);
+					packageToRequest.loading(false);
+					item.loading(false);
 				}
 			});
 
-			if (Enums.StorageResultType.Success === sResult && oData && oData.Result && oData.Result['Reload'])
+			if (StorageResultType.Success === result && data && data.Result && data.Result.Reload)
 			{
 				window.location.reload();
 			}
 			else
 			{
-				require('App/Admin').reloadPackagesList();
+				getApp().reloadPackagesList();
 			}
 		};
-	};
+	}
 
-	PackagesAdminSettings.prototype.deletePackage = function (oPackage)
-	{
-		if (oPackage)
+	deletePackage(packageToDelete) {
+		if (packageToDelete)
 		{
-			oPackage['loading'](true);
-			Remote.packageDelete(this.requestHelper(oPackage, false), oPackage);
+			packageToDelete.loading(true);
+			Remote.packageDelete(this.requestHelper(packageToDelete, false), packageToDelete);
 		}
-	};
+	}
 
-	PackagesAdminSettings.prototype.installPackage = function (oPackage)
-	{
-		if (oPackage)
+	installPackage(packageToInstall) {
+		if (packageToInstall)
 		{
-			oPackage['loading'](true);
-			Remote.packageInstall(this.requestHelper(oPackage, true), oPackage);
+			packageToInstall.loading(true);
+			Remote.packageInstall(this.requestHelper(packageToInstall, true), packageToInstall);
 		}
-	};
+	}
+}
 
-	module.exports = PackagesAdminSettings;
-
-}());
+export {PackagesAdminSettings, PackagesAdminSettings as default};

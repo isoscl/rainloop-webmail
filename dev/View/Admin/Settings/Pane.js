@@ -1,57 +1,55 @@
 
-(function () {
+/* global RL_COMMUNITY */
 
-	'use strict';
+import ko from 'ko';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import * as Settings from 'Storage/Settings';
 
-		Settings = require('Storage/Settings'),
-		Remote = require('Storage/Admin/Remote'),
+import Remote from 'Remote/Admin/Ajax';
 
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
+import DomainStore from 'Stores/Admin/Domain';
+import PluginStore from 'Stores/Admin/Plugin';
+import PackageStore from 'Stores/Admin/Package';
 
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function PaneSettingsAdminView()
-	{
-		AbstractView.call(this, 'Right', 'AdminPane');
+import {getApp} from 'Helper/Apps/Admin';
+
+import {view, ViewType} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
+
+@view({
+	name: 'View/Admin/Settings/Pane',
+	type: ViewType.Right,
+	templateID: 'AdminPane'
+})
+class PaneSettingsAdminView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
 		this.adminDomain = ko.observable(Settings.settingsGet('AdminDomain'));
-		this.version = ko.observable(Settings.settingsGet('Version'));
+		this.version = ko.observable(Settings.appSettingsGet('version'));
 
 		this.capa = !!Settings.settingsGet('PremType');
+		this.community = RL_COMMUNITY;
 
-		this.adminManLoading = ko.computed(function () {
-			return '000' !== [
-				require('Stores/Admin/Domain').domains.loading() ? '1' : '0',
-				require('Stores/Admin/Plugin').plugins.loading() ? '1' : '0',
-				require('Stores/Admin/Package').packages.loading() ? '1' : '0'
-			].join('');
-		}, this);
+		this.adminManLoading = ko.computed(
+			() => '000' !== [
+				DomainStore.domains.loading() ? '1' : '0',
+				PluginStore.plugins.loading() ? '1' : '0',
+				PackageStore.packages.loading() ? '1' : '0'
+			].join('')
+		);
 
-		this.adminManLoadingVisibility = ko.computed(function () {
-			return this.adminManLoading() ? 'visible' : 'hidden';
-		}, this).extend({'rateLimit': 300});
-
-		kn.constructorEnd(this);
+		this.adminManLoadingVisibility = ko.computed(
+			() => (this.adminManLoading() ? 'visible' : 'hidden')
+		).extend({rateLimit: 300});
 	}
 
-	kn.extendAsViewModel(['View/Admin/Settings/Pane', 'AdminSettingsPaneViewModel'], PaneSettingsAdminView);
-	_.extend(PaneSettingsAdminView.prototype, AbstractView.prototype);
-
-	PaneSettingsAdminView.prototype.logoutClick = function ()
-	{
-		Remote.adminLogout(function () {
-			require('App/Admin').loginAndLogoutReload(true);
+	logoutClick() {
+		Remote.adminLogout(() => {
+			getApp().loginAndLogoutReload(true, true);
 		});
-	};
+	}
+}
 
-	module.exports = PaneSettingsAdminView;
-
-}());
+export {PaneSettingsAdminView, PaneSettingsAdminView as default};

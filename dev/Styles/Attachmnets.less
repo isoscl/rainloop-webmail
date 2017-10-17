@@ -1,5 +1,7 @@
 .attachmentItem {
 
+	position: relative;
+
 	display: inline-block;
 	margin: 5px;
 	max-width: 200px;
@@ -9,14 +11,30 @@
 	line-height: 24px;
 	border: 0;
 	background-color: #fff;
-	box-shadow: 0 1px 5px #ccc;
+
+	box-shadow: 0 1px 4px #ccc;
 	box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
 	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 1px 5px rgba(0, 0, 0, 0.1);
 
-	border-radius: 2px;
+	border-radius: 3px;
 
 	&.waiting {
 		opacity: 0.6;
+	}
+
+	&.checked {
+		box-shadow: 0 1px 4px #00a;
+		box-shadow: 0 1px 5px rgba(0, 0, 255, 0.3);
+		box-shadow: 0 0 0 1px rgba(0, 0, 255, 0.1), 0 1px 5px rgba(0, 0, 255, 0.2);
+	}
+
+	.checkedParent {
+		position: absolute;
+		top: 0;
+		right: 0;
+		padding: 1px 4px 0px 5px;
+		background: #FAFAFA;
+		border: 0px solid #CCC;
 	}
 
 	.attachmentSize {
@@ -60,8 +78,7 @@
 			color: #999;
 			font-weight: bold;
 			line-height: 55px;
-
-			text-shadow: 0 1px 0 #FFF;
+			text-shadow: 0 1px 0 #fff;
 			text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
 		}
 
@@ -102,6 +119,15 @@
 		color: #aaa;
 	}
 
+	.attachmentIcon  {
+		&.icon-none {
+			display: none;
+		}
+		&.icon-file-certificate {
+			margin-left: 15px;
+		}
+	}
+
 	.attachmentIconText {
 		display: inline-block;
 		font-size: 28px;
@@ -113,9 +139,13 @@
 		font-style: normal;
 	}
 
-	.attachmentIcon.icon-none {
-		display: none;
+/*
+	.attachmentIconParent.hasPreview.isImage {
+		.iconMain {
+			display: none;
+		}
 	}
+*/
 
 	.attachmentIconParent.hasPreview:hover {
 		.iconPreview {
@@ -126,12 +156,31 @@
 		}
 	}
 
-	.showPreview {
+	.attachmentIconParent.hasPreplay:hover {
+		.iconPreview {
+			display: inline-block;
+		}
+		.iconMain {
+			display: none;
+		}
+	}
+
+	.showPreview, .showPreplay {
 		display: none;
+		cursor: pointer;
 	}
 
 	.attachmentIconParent.hasPreview {
 		.showPreview {
+			display: inline;
+		}
+
+		.hidePreview {
+			display: none;
+		}
+	}
+	.attachmentIconParent.hasPreplay {
+		.showPreplay {
 			display: inline;
 		}
 

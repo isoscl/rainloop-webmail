@@ -1,35 +1,37 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {MESSAGES_PER_PAGE_VALUES} from 'Common/Consts';
+import {bAnimationSupported} from 'Common/Globals';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {SaveSettingsStep, Magics, EditorDefaultType, Layout} from 'Common/Enums';
 
-		Enums = require('Common/Enums'),
-		Consts = require('Common/Consts'),
-		Globals = require('Common/Globals'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import {
+	settingsSaveHelperSimpleFunction,
+	convertLangName, isArray, timeOutAction, boolToAjax
+} from 'Common/Utils';
 
-		AppStore = require('Stores/User/App'),
-		LanguageStore = require('Stores/Language'),
-		SettingsStore = require('Stores/User/Settings'),
-		NotificationStore = require('Stores/User/Notification'),
+import {i18n, trigger as translatorTrigger, reload as translatorReload} from 'Common/Translator';
 
-		Data = require('Storage/User/Data'),
-		Remote = require('Storage/User/Remote')
-	;
+import {showScreenPopup} from 'Knoin/Knoin';
 
-	/**
-	 * @constructor
-	 */
-	function GeneralUserSettings()
-	{
+import AppStore from 'Stores/User/App';
+import LanguageStore from 'Stores/Language';
+import SettingsStore from 'Stores/User/Settings';
+import IdentityStore from 'Stores/User/Identity';
+import NotificationStore from 'Stores/User/Notification';
+import MessageStore from 'Stores/User/Message';
+
+import Remote from 'Remote/User/Ajax';
+
+class GeneralUserSettings
+{
+	constructor() {
 		this.language = LanguageStore.language;
+		this.languages = LanguageStore.languages;
 		this.messagesPerPage = SettingsStore.messagesPerPage;
-		this.messagesPerPageArray = Consts.Defaults.MessagesPerPageArray;
+		this.messagesPerPageArray = MESSAGES_PER_PAGE_VALUES;
 
 		this.editorDefaultType = SettingsStore.editorDefaultType;
 		this.layout = SettingsStore.layout;
@@ -49,155 +51,138 @@
 		this.replySameFolder = SettingsStore.replySameFolder;
 		this.allowLanguagesOnSettings = AppStore.allowLanguagesOnSettings;
 
-		this.languageFullName = ko.computed(function () {
-			return Utils.convertLangName(this.language());
-		}, this);
+		this.languageFullName = ko.computed(() => convertLangName(this.language()));
+		this.languageTrigger = ko.observable(SaveSettingsStep.Idle).extend({throttle: Magics.Time100ms});
 
-		this.languageTrigger = ko.observable(Enums.SaveSettingsStep.Idle).extend({'throttle': 100});
+		this.mppTrigger = ko.observable(SaveSettingsStep.Idle);
+		this.editorDefaultTypeTrigger = ko.observable(SaveSettingsStep.Idle);
+		this.layoutTrigger = ko.observable(SaveSettingsStep.Idle);
 
-		this.mppTrigger = ko.observable(Enums.SaveSettingsStep.Idle);
-		this.editorDefaultTypeTrigger = ko.observable(Enums.SaveSettingsStep.Idle);
-		this.layoutTrigger = ko.observable(Enums.SaveSettingsStep.Idle);
+		this.isAnimationSupported = bAnimationSupported;
 
-		this.isAnimationSupported = Globals.bAnimationSupported;
+		this.identities = IdentityStore.identities;
 
-		this.editorDefaultTypes = ko.computed(function () {
-			Translator.trigger();
+		this.identityMain = ko.computed(() => {
+			const list = this.identities();
+			return isArray(list) ? _.find(list, (item) => item && '' === item.id()) : null;
+		});
+
+		this.identityMainDesc = ko.computed(() => {
+			const identity = this.identityMain();
+			return identity ? identity.formattedName() : '---';
+		});
+
+		this.editorDefaultTypes = ko.computed(() => {
+			translatorTrigger();
 			return [
-				{'id': Enums.EditorDefaultType.Html, 'name': Translator.i18n('SETTINGS_GENERAL/LABEL_EDITOR_HTML')},
-				{'id': Enums.EditorDefaultType.Plain, 'name': Translator.i18n('SETTINGS_GENERAL/LABEL_EDITOR_PLAIN')},
-				{'id': Enums.EditorDefaultType.HtmlForced, 'name': Translator.i18n('SETTINGS_GENERAL/LABEL_EDITOR_HTML_FORCED')},
-				{'id': Enums.EditorDefaultType.PlainForced, 'name': Translator.i18n('SETTINGS_GENERAL/LABEL_EDITOR_PLAIN_FORCED')}
+				{'id': EditorDefaultType.Html, 'name': i18n('SETTINGS_GENERAL/LABEL_EDITOR_HTML')},
+				{'id': EditorDefaultType.Plain, 'name': i18n('SETTINGS_GENERAL/LABEL_EDITOR_PLAIN')},
+				{'id': EditorDefaultType.HtmlForced, 'name': i18n('SETTINGS_GENERAL/LABEL_EDITOR_HTML_FORCED')},
+				{'id': EditorDefaultType.PlainForced, 'name': i18n('SETTINGS_GENERAL/LABEL_EDITOR_PLAIN_FORCED')}
 			];
-		}, this);
+		});
 
-		this.layoutTypes = ko.computed(function () {
-			Translator.trigger();
+		this.layoutTypes = ko.computed(() => {
+			translatorTrigger();
 			return [
-				{'id': Enums.Layout.NoPreview, 'name': Translator.i18n('SETTINGS_GENERAL/LABEL_LAYOUT_NO_SPLIT')},
-				{'id': Enums.Layout.SidePreview, 'name': Translator.i18n('SETTINGS_GENERAL/LABEL_LAYOUT_VERTICAL_SPLIT')},
-				{'id': Enums.Layout.BottomPreview, 'name': Translator.i18n('SETTINGS_GENERAL/LABEL_LAYOUT_HORIZONTAL_SPLIT')}
+				{'id': Layout.NoPreview, 'name': i18n('SETTINGS_GENERAL/LABEL_LAYOUT_NO_SPLIT')},
+				{'id': Layout.SidePreview, 'name': i18n('SETTINGS_GENERAL/LABEL_LAYOUT_VERTICAL_SPLIT')},
+				{'id': Layout.BottomPreview, 'name': i18n('SETTINGS_GENERAL/LABEL_LAYOUT_HORIZONTAL_SPLIT')}
 			];
-		}, this);
+		});
 	}
 
-	GeneralUserSettings.prototype.testSoundNotification = function ()
-	{
+	editMainIdentity() {
+		const identity = this.identityMain();
+		if (identity)
+		{
+			showScreenPopup(require('View/Popup/Identity'), [identity]);
+		}
+	}
+
+	testSoundNotification() {
 		NotificationStore.playSoundNotification(true);
-	};
+	}
 
-	GeneralUserSettings.prototype.onBuild = function ()
-	{
-		var self = this;
+	onBuild() {
+		_.delay(() => {
+			const
+				f0 = settingsSaveHelperSimpleFunction(this.editorDefaultTypeTrigger, this),
+				f1 = settingsSaveHelperSimpleFunction(this.mppTrigger, this),
+				f2 = settingsSaveHelperSimpleFunction(this.layoutTrigger, this),
+				fReloadLanguageHelper = (saveSettingsStep) => () => {
+					this.languageTrigger(saveSettingsStep);
+					_.delay(() => this.languageTrigger(SaveSettingsStep.Idle), Magics.Time1s);
+				};
 
-		_.delay(function () {
-
-			var
-				f0 = Utils.settingsSaveHelperSimpleFunction(self.editorDefaultTypeTrigger, self),
-				f1 = Utils.settingsSaveHelperSimpleFunction(self.mppTrigger, self),
-				f2 = Utils.settingsSaveHelperSimpleFunction(self.layoutTrigger, self),
-				fReloadLanguageHelper = function (iSaveSettingsStep) {
-					return function() {
-						self.languageTrigger(iSaveSettingsStep);
-						_.delay(function () {
-							self.languageTrigger(Enums.SaveSettingsStep.Idle);
-						}, 1000);
-					};
-				}
-			;
-
-			self.language.subscribe(function (sValue) {
-
-				self.languageTrigger(Enums.SaveSettingsStep.Animate);
-
-				Translator.reload(sValue,
-					fReloadLanguageHelper(Enums.SaveSettingsStep.TrueResult),
-					fReloadLanguageHelper(Enums.SaveSettingsStep.FalseResult));
-
-				Remote.saveSettings(null, {
-					'Language': sValue
-				});
-			});
-
-			self.editorDefaultType.subscribe(function (sValue) {
-				Remote.saveSettings(f0, {
-					'EditorDefaultType': sValue
-				});
-			});
-
-			self.messagesPerPage.subscribe(function (iValue) {
-				Remote.saveSettings(f1, {
-					'MPP': iValue
-				});
-			});
-
-			self.showImages.subscribe(function (bValue) {
-				Remote.saveSettings(null, {
-					'ShowImages': bValue ? '1' : '0'
-				});
-			});
-
-			self.enableDesktopNotification.subscribe(function (bValue) {
-				Utils.timeOutAction('SaveDesktopNotifications', function () {
+			this.language.subscribe((value) => {
+				this.languageTrigger(SaveSettingsStep.Animate);
+				translatorReload(false, value).then(
+					fReloadLanguageHelper(SaveSettingsStep.TrueResult),
+					fReloadLanguageHelper(SaveSettingsStep.FalseResult)
+				).then(() => {
 					Remote.saveSettings(null, {
-						'DesktopNotifications': bValue ? '1' : '0'
+						'Language': value
 					});
-				}, 3000);
+				});
+
 			});
 
-			self.enableSoundNotification.subscribe(function (bValue) {
-				Utils.timeOutAction('SaveSoundNotification', function () {
+			this.editorDefaultType.subscribe(Remote.saveSettingsHelper('EditorDefaultType', null, f0));
+			this.messagesPerPage.subscribe(Remote.saveSettingsHelper('MPP', null, f1));
+			this.showImages.subscribe(Remote.saveSettingsHelper('ShowImages', boolToAjax));
+
+			this.useCheckboxesInList.subscribe(Remote.saveSettingsHelper('UseCheckboxesInList', boolToAjax));
+
+			this.enableDesktopNotification.subscribe((value) => {
+				timeOutAction('SaveDesktopNotifications', () => {
 					Remote.saveSettings(null, {
-						'SoundNotification': bValue ? '1' : '0'
+						'DesktopNotifications': boolToAjax(value)
 					});
-				}, 3000);
+				}, Magics.Time3s);
 			});
 
-			self.replySameFolder.subscribe(function (bValue) {
-				Utils.timeOutAction('SaveReplySameFolder', function () {
+			this.enableSoundNotification.subscribe((value) => {
+				timeOutAction('SaveSoundNotification', () => {
 					Remote.saveSettings(null, {
-						'ReplySameFolder': bValue ? '1' : '0'
+						'SoundNotification': boolToAjax(value)
 					});
-				}, 3000);
+				}, Magics.Time3s);
 			});
 
-			self.useThreads.subscribe(function (bValue) {
+			this.replySameFolder.subscribe((value) => {
+				timeOutAction('SaveReplySameFolder', () => {
+					Remote.saveSettings(null, {
+						'ReplySameFolder': boolToAjax(value)
+					});
+				}, Magics.Time3s);
+			});
 
-				Data.messageList([]);
-
+			this.useThreads.subscribe((value) => {
+				MessageStore.messageList([]);
 				Remote.saveSettings(null, {
-					'UseThreads': bValue ? '1' : '0'
+					'UseThreads': boolToAjax(value)
 				});
 			});
 
-			self.layout.subscribe(function (nValue) {
-
-				Data.messageList([]);
-
+			this.layout.subscribe((value) => {
+				MessageStore.messageList([]);
 				Remote.saveSettings(f2, {
-					'Layout': nValue
+					'Layout': value
 				});
 			});
+		}, Magics.Time50ms);
+	}
 
-			self.useCheckboxesInList.subscribe(function (bValue) {
-				Remote.saveSettings(null, {
-					'UseCheckboxesInList': bValue ? '1' : '0'
-				});
-			});
-
-		}, 50);
-	};
-
-	GeneralUserSettings.prototype.onShow = function ()
-	{
+	onShow() {
 		this.enableDesktopNotification.valueHasMutated();
-	};
+	}
 
-	GeneralUserSettings.prototype.selectLanguage = function ()
-	{
-		require('Knoin/Knoin').showScreenPopup(require('View/Popup/Languages'));
-	};
+	selectLanguage() {
+		showScreenPopup(require('View/Popup/Languages'), [
+			this.language, this.languages(), LanguageStore.userLanguage()
+		]);
+	}
+}
 
-	module.exports = GeneralUserSettings;
-
-}());
+export {GeneralUserSettings, GeneralUserSettings as default};

@@ -1,77 +1,46 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {pString} from 'Common/Utils';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-		Utils = require('Common/Utils'),
-
-		AbstractModel = require('Knoin/AbstractModel')
-	;
-
+class TemplateModel extends AbstractModel
+{
 	/**
-	 * @constructor
-	 *
-	 * @param {string} sID
-	 * @param {string} sName
-	 * @param {string} sBody
+	 * @param {string} id
+	 * @param {string} name
+	 * @param {string} body
 	 */
-	function TemplateModel(sID, sName, sBody)
+	constructor(id, name, body)
 	{
-		AbstractModel.call(this, 'TemplateModel');
+		super('TemplateModel');
 
-		this.id = sID;
-		this.name = sName;
-		this.body = sBody;
+		this.id = id;
+		this.name = name;
+		this.body = body;
 		this.populated = true;
 
 		this.deleteAccess = ko.observable(false);
 	}
 
-	_.extend(TemplateModel.prototype, AbstractModel.prototype);
-
 	/**
-	 * @type {string}
+	 * @returns {boolean}
 	 */
-	TemplateModel.prototype.id = '';
-
-	/**
-	 * @type {string}
-	 */
-	TemplateModel.prototype.name = '';
-
-	/**
-	 * @type {string}
-	 */
-	TemplateModel.prototype.body = '';
-
-	/**
-	 * @type {boolean}
-	 */
-	TemplateModel.prototype.populated = true;
-
-	/**
-	 * @type {boolean}
-	 */
-	TemplateModel.prototype.parse = function (oItem)
-	{
-		var bResult = false;
-		if (oItem && 'Object/Template' === oItem['@Object'])
+	parse(json) {
+		let result = false;
+		if (json && 'Object/Template' === json['@Object'])
 		{
-			this.id = Utils.pString(oItem['ID']);
-			this.name = Utils.pString(oItem['Name']);
-			this.body = Utils.pString(oItem['Body']);
-			this.populated = !!oItem['Populated'];
+			this.id = pString(json.ID);
+			this.name = pString(json.Name);
+			this.body = pString(json.Body);
+			this.populated = !!json.Populated;
 
-			bResult = true;
+			result = true;
 		}
 
-		return bResult;
-	};
+		return result;
+	}
+}
 
-	module.exports = TemplateModel;
-
-}());
+export {TemplateModel, TemplateModel as default};

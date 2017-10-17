@@ -1,50 +1,55 @@
 
-(function () {
+import $ from '$';
+import key from 'key';
 
-	'use strict';
+import {KeyState} from 'Common/Enums';
+import {leftPanelDisabled} from 'Common/Globals';
+import {settings, inbox} from 'Common/Links';
+import {getFolderInboxName} from 'Common/Cache';
 
-	var
-		_ = require('_'),
+import * as Settings from 'Storage/Settings';
 
-		Globals = require('Common/Globals'),
-		Links = require('Common/Links'),
+import {view, ViewType, setHash, settingsMenuKeysHendler} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Cache = require('Storage/User/Cache'),
-
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
+@view({
+	name: 'View/User/Settings/Menu',
+	type: ViewType.Left,
+	templateID: 'SettingsMenu'
+})
+class MenuSettingsUserView extends AbstractViewNext
+{
 	/**
-	 * @param {?} oScreen
-	 *
-	 * @constructor
-	 * @extends AbstractView
+	 * @param {Object} screen
 	 */
-	function MenuSettingsUserView(oScreen)
-	{
-		AbstractView.call(this, 'Left', 'SettingsMenu');
+	constructor(screen) {
+		super();
 
-		this.leftPanelDisabled = Globals.leftPanelDisabled;
+		this.leftPanelDisabled = leftPanelDisabled;
 
-		this.menu = oScreen.menu;
+		this.mobile = Settings.appSettingsGet('mobile');
 
-		kn.constructorEnd(this);
+		this.menu = screen.menu;
 	}
 
-	kn.extendAsViewModel(['View/User/Settings/Menu', 'View/App/Settings/Menu', 'SettingsMenuViewModel'], MenuSettingsUserView);
-	_.extend(MenuSettingsUserView.prototype, AbstractView.prototype);
+	onBuild(dom) {
+		if (this.mobile)
+		{
+			dom.on('click', '.b-settings-menu .e-item.selectable', () => {
+				leftPanelDisabled(true);
+			});
+		}
 
-	MenuSettingsUserView.prototype.link = function (sRoute)
-	{
-		return Links.settings(sRoute);
-	};
+		key('up, down', KeyState.Settings, settingsMenuKeysHendler($('.b-settings-menu .e-item', dom)));
+	}
 
-	MenuSettingsUserView.prototype.backToMailBoxClick = function ()
-	{
-		kn.setHash(Links.inbox(Cache.getFolderInboxName()));
-	};
+	link(route) {
+		return settings(route);
+	}
 
-	module.exports = MenuSettingsUserView;
+	backToMailBoxClick() {
+		setHash(inbox(getFolderInboxName()));
+	}
+}
 
-}());
+export {MenuSettingsUserView, MenuSettingsUserView as default};

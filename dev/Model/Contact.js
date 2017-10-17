@@ -1,25 +1,17 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {ContactPropertyType} from 'Common/Enums';
+import {trim, isNonEmptyArray, isNormal, pInt, pString} from 'Common/Utils';
+import {emptyContactPic} from 'Common/Links';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Links = require('Common/Links'),
-
-		AbstractModel = require('Knoin/AbstractModel')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function ContactModel()
-	{
-		AbstractModel.call(this, 'ContactModel');
+class ContactModel extends AbstractModel
+{
+	constructor() {
+		super('ContactModel');
 
 		this.idContact = 0;
 		this.display = '';
@@ -32,109 +24,104 @@
 		this.deleted = ko.observable(false);
 	}
 
-	_.extend(ContactModel.prototype, AbstractModel.prototype);
-
 	/**
-	 * @return {Array|null}
+	 * @returns {Array|null}
 	 */
-	ContactModel.prototype.getNameAndEmailHelper = function ()
-	{
-		var
-			sName = '',
-			sEmail = ''
-		;
+	getNameAndEmailHelper() {
+		let
+			name = '',
+			email = '';
 
-		if (Utils.isNonEmptyArray(this.properties))
+		if (isNonEmptyArray(this.properties))
 		{
-			_.each(this.properties, function (aProperty) {
-				if (aProperty)
+			_.each(this.properties, (property) => {
+				if (property)
 				{
-					if (Enums.ContactPropertyType.FirstName === aProperty[0])
+					if (ContactPropertyType.FirstName === property[0])
 					{
-						sName = Utils.trim(aProperty[1] + ' ' + sName);
+						name = trim(property[1] + ' ' + name);
 					}
-					else if (Enums.ContactPropertyType.LastName === aProperty[0])
+					else if (ContactPropertyType.LastName === property[0])
 					{
-						sName = Utils.trim(sName + ' ' + aProperty[1]);
+						name = trim(name + ' ' + property[1]);
 					}
-					else if ('' === sEmail && Enums.ContactPropertyType.Email === aProperty[0])
+					else if ('' === email && ContactPropertyType.Email === property[0])
 					{
-						sEmail = aProperty[1];
+						email = property[1];
 					}
 				}
-			}, this);
+			});
 		}
 
-		return '' === sEmail ? null : [sEmail, sName];
-	};
+		return '' === email ? null : [email, name];
+	}
 
-	ContactModel.prototype.parse = function (oItem)
-	{
-		var bResult = false;
-		if (oItem && 'Object/Contact' === oItem['@Object'])
+	/**
+	 * @param {Object} oItem
+	 * @returns {boolean}
+	 */
+	parse(json) {
+		let result = false;
+		if (json && 'Object/Contact' === json['@Object'])
 		{
-			this.idContact = Utils.pInt(oItem['IdContact']);
-			this.display = Utils.pString(oItem['Display']);
-			this.readOnly = !!oItem['ReadOnly'];
+			this.idContact = pInt(json.IdContact);
+			this.display = pString(json.Display);
+			this.readOnly = !!json.ReadOnly;
 
-			if (Utils.isNonEmptyArray(oItem['Properties']))
+			if (isNonEmptyArray(json.Properties))
 			{
-				_.each(oItem['Properties'], function (oProperty) {
-					if (oProperty && oProperty['Type'] && Utils.isNormal(oProperty['Value']) && Utils.isNormal(oProperty['TypeStr']))
+				_.each(json.Properties, (property) => {
+					if (property && property.Type && isNormal(property.Value) && isNormal(property.TypeStr))
 					{
-						this.properties.push([Utils.pInt(oProperty['Type']), Utils.pString(oProperty['Value']), Utils.pString(oProperty['TypeStr'])]);
+						this.properties.push([pInt(property.Type), pString(property.Value), pString(property.TypeStr)]);
 					}
-				}, this);
+				});
 			}
 
-			bResult = true;
+			result = true;
 		}
 
-		return bResult;
-	};
+		return result;
+	}
 
 	/**
-	 * @return {string}
+	 * @returns {string}
 	 */
-	ContactModel.prototype.srcAttr = function ()
-	{
-		return Links.emptyContactPic();
-	};
+	srcAttr() {
+		return emptyContactPic();
+	}
 
 	/**
-	 * @return {string}
+	 * @returns {string}
 	 */
-	ContactModel.prototype.generateUid = function ()
-	{
-		return '' + this.idContact;
-	};
+	generateUid() {
+		return pString(this.idContact);
+	}
 
 	/**
 	 * @return string
 	 */
-	ContactModel.prototype.lineAsCss = function ()
-	{
-		var aResult = [];
+	lineAsCss() {
+		const result = [];
 		if (this.deleted())
 		{
-			aResult.push('deleted');
+			result.push('deleted');
 		}
 		if (this.selected())
 		{
-			aResult.push('selected');
+			result.push('selected');
 		}
 		if (this.checked())
 		{
-			aResult.push('checked');
+			result.push('checked');
 		}
 		if (this.focused())
 		{
-			aResult.push('focused');
+			result.push('focused');
 		}
 
-		return aResult.join(' ');
-	};
+		return result.join(' ');
+	}
+}
 
-	module.exports = ContactModel;
-
-}());
+export {ContactModel, ContactModel as default};

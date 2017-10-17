@@ -1,54 +1,29 @@
 
-(function () {
+import _ from '_';
+import {CookieDriver} from 'Common/ClientStorageDriver/Cookie';
+import {LocalStorageDriver} from 'Common/ClientStorageDriver/LocalStorage';
 
-	'use strict';
+const SupportedStorageDriver = _.find(
+	[LocalStorageDriver, CookieDriver], (StorageDriver) => StorageDriver && StorageDriver.supported()
+);
 
-	/**
-	 * @constructor
-	 */
-	function ClientStorage()
-	{
-		var
-			NextStorageDriver = require('_').find([
-				require('Common/ClientStorageDriver/LocalStorage'),
-				require('Common/ClientStorageDriver/Cookie')
-			], function (NextStorageDriver) {
-				return NextStorageDriver && NextStorageDriver.supported();
-			})
-		;
+const driver = SupportedStorageDriver ? new SupportedStorageDriver() : null;
 
-		this.oDriver = null;
+/**
+ * @param {number} key
+ * @param {*} data
+ * @returns {boolean}
+ */
+export function set(key, data)
+{
+	return driver ? driver.set('p' + key, data) : false;
+}
 
-		if (NextStorageDriver)
-		{
-			this.oDriver = new NextStorageDriver();
-		}
-	}
-
-	/**
-	 * @type {LocalStorageDriver|CookieDriver|null}
-	 */
-	ClientStorage.prototype.oDriver = null;
-
-	/**
-	 * @param {number} iKey
-	 * @param {*} mData
-	 * @return {boolean}
-	 */
-	ClientStorage.prototype.set = function (iKey, mData)
-	{
-		return this.oDriver ? this.oDriver.set('p' + iKey, mData) : false;
-	};
-
-	/**
-	 * @param {number} iKey
-	 * @return {*}
-	 */
-	ClientStorage.prototype.get = function (iKey)
-	{
-		return this.oDriver ? this.oDriver.get('p' + iKey) : null;
-	};
-
-	module.exports = new ClientStorage();
-
-}());
+/**
+ * @param {number} key
+ * @returns {*}
+ */
+export function get(key)
+{
+	return driver ? driver.get('p' + key) : null;
+}

@@ -1,39 +1,26 @@
 
-(function () {
+import ko from 'ko';
+import {isArray} from 'Common/Utils';
+import * as Settings from 'Storage/Settings';
 
-	'use strict';
-
-	var
-		ko = require('ko'),
-
-		Utils = require('Common/Utils'),
-
-		Settings = require('Storage/Settings')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function ThemeStore()
-	{
+class ThemeStore
+{
+	constructor() {
 		this.themes = ko.observableArray([]);
 		this.themeBackgroundName = ko.observable('');
 		this.themeBackgroundHash = ko.observable('');
 
-		this.theme = ko.observable('')
-			.extend({'limitedList': this.themes});
+		this.theme = ko.observable('').extend({limitedList: this.themes});
 	}
 
-	ThemeStore.prototype.populate = function ()
-	{
-		var aThemes = Settings.settingsGet('Themes');
+	populate() {
+		const themes = Settings.appSettingsGet('themes');
 
-		this.themes(Utils.isArray(aThemes) ? aThemes : []);
+		this.themes(isArray(themes) ? themes : []);
 		this.theme(Settings.settingsGet('Theme'));
 		this.themeBackgroundName(Settings.settingsGet('UserBackgroundName'));
 		this.themeBackgroundHash(Settings.settingsGet('UserBackgroundHash'));
-	};
+	}
+}
 
-	module.exports = new ThemeStore();
-
-}());
+export default new ThemeStore();

@@ -177,6 +177,8 @@ class SmtpClient extends \MailSo\Net\NetClient
 	/**
 	 * @param string $sLogin
 	 * @param string $sPassword
+	 * @param boolean $bUseAuthPlainIfSupported = true
+	 * @param boolean $bUseAuthCramMd5IfSupported = true
 	 *
 	 * @return \MailSo\Smtp\SmtpClient
 	 *
@@ -184,15 +186,15 @@ class SmtpClient extends \MailSo\Net\NetClient
 	 * @throws \MailSo\Net\Exceptions\Exception
 	 * @throws \MailSo\Smtp\Exceptions\Exception
 	 */
-	public function Login($sLogin, $sPassword)
+	public function Login($sLogin, $sPassword, $bUseAuthPlainIfSupported = true, $bUseAuthCramMd5IfSupported = true)
 	{
-		$sLogin = \MailSo\Base\Utils::IdnToAscii($sLogin);
+		$sLogin = \MailSo\Base\Utils::IdnToAscii(\MailSo\Base\Utils::Trim($sLogin));
 
-		if ($this->IsAuthSupported('LOGIN'))
+		if ($bUseAuthCramMd5IfSupported && $this->IsAuthSupported('CRAM-MD5'))
 		{
 			try
 			{
-				$this->sendRequestWithCheck('AUTH', 334, 'LOGIN');
+				$this->sendRequestWithCheck('AUTH', 334, 'CRAM-MD5');
 			}
 			catch (\MailSo\Smtp\Exceptions\NegativeResponseException $oException)
 			{
@@ -202,10 +204,26 @@ class SmtpClient extends \MailSo\Net\NetClient
 					\MailSo\Log\Enumerations\Type::NOTICE, true);
 			}
 
+			$sTicket = '';
+
+			$sContinuationResponse = !empty($this->aResults[0]) ? \trim($this->aResults[0]) : '';
+			if ($sContinuationResponse && '334 ' === \substr($sContinuationResponse, 0, 4) && 0 < \strlen(\substr($sContinuationResponse, 4)))
+			{
+				$sTicket = @\base64_decode(\substr($sContinuationResponse, 4));
+				$this->writeLogWithCrlf('ticket: '.$sTicket);
+			}
+
+			if (empty($sTicket))
+			{
+				$this->writeLogException(
+					new \MailSo\Smtp\Exceptions\NegativeResponseException(),
+					\MailSo\Log\Enumerations\Type::NOTICE, true
+				);
+			}
+
 			try
 			{
-				$this->sendRequestWithCheck(\base64_encode($sLogin), 334, '');
-				$this->sendRequestWithCheck(\base64_encode($sPassword), 235, '', true);
+				$this->sendRequestWithCheck(\base64_encode($sLogin.' '.\MailSo\Base\Utils::Hmac($sTicket, $sPassword)), 235, '', true);
 			}
 			catch (\MailSo\Smtp\Exceptions\NegativeResponseException $oException)
 			{
@@ -215,7 +233,7 @@ class SmtpClient extends \MailSo\Net\NetClient
 					\MailSo\Log\Enumerations\Type::NOTICE, true);
 			}
 		}
-		else if ($this->IsAuthSupported('PLAIN'))
+		else if ($bUseAuthPlainIfSupported && $this->IsAuthSupported('PLAIN'))
 		{
 			if ($this->__USE_SINGLE_LINE_AUTH_PLAIN_COMMAND)
 			{
@@ -258,6 +276,33 @@ class SmtpClient extends \MailSo\Net\NetClient
 				}
 			}
 		}
+		else if ($this->IsAuthSupported('LOGIN'))
+		{
+			try
+			{
+				$this->sendRequestWithCheck('AUTH', 334, 'LOGIN');
+			}
+			catch (\MailSo\Smtp\Exceptions\NegativeResponseException $oException)
+			{
+				$this->writeLogException(
+					new \MailSo\Smtp\Exceptions\LoginBadMethodException(
+						$oException->GetResponses(), $oException->getMessage(), 0, $oException),
+					\MailSo\Log\Enumerations\Type::NOTICE, true);
+			}
+
+			try
+			{
+				$this->sendRequestWithCheck(\base64_encode($sLogin), 334, '');
+				$this->sendRequestWithCheck(\base64_encode($sPassword), 235, '', true);
+			}
+			catch (\MailSo\Smtp\Exceptions\NegativeResponseException $oException)
+			{
+				$this->writeLogException(
+					new \MailSo\Smtp\Exceptions\LoginBadCredentialsException(
+						$oException->GetResponses(), $oException->getMessage(), 0, $oException),
+					\MailSo\Log\Enumerations\Type::NOTICE, true);
+			}
+		}
 		else
 		{
 			$this->writeLogException(
@@ -283,7 +328,7 @@ class SmtpClient extends \MailSo\Net\NetClient
 		{
 			try
 			{
-				$this->sendRequestWithCheck('AUTH', 235, 'XOAUTH2 '.trim($sXOAuth2Token));
+				$this->sendRequestWithCheck('AUTH', 235, 'XOAUTH2 '.\trim($sXOAuth2Token));
 			}
 			catch (\MailSo\Smtp\Exceptions\NegativeResponseException $oException)
 			{
@@ -306,21 +351,29 @@ class SmtpClient extends \MailSo\Net\NetClient
 	/**
 	 * @param string $sFrom
 	 * @param string $sSizeIfSupported = ''
+	 * @param bool $bDsn = false
 	 *
 	 * @return \MailSo\Smtp\SmtpClient
 	 *
 	 * @throws \MailSo\Net\Exceptions\Exception
 	 * @throws \MailSo\Smtp\Exceptions\Exception
 	 */
-	public function MailFrom($sFrom, $sSizeIfSupported = '')
+	public function MailFrom($sFrom, $sSizeIfSupported = '', $bDsn = false)
 	{
-		$sFrom = \MailSo\Base\Utils::IdnToAscii($sFrom, true);
+		$sFrom = \MailSo\Base\Utils::IdnToAscii(
+			\MailSo\Base\Utils::Trim($sFrom), true);
+
 		$sCmd = 'FROM:<'.$sFrom.'>';
 
 		$sSizeIfSupported = (string) $sSizeIfSupported;
 		if (0 < \strlen($sSizeIfSupported) && \is_numeric($sSizeIfSupported) && $this->IsSupported('SIZE'))
 		{
 			$sCmd .= ' SIZE='.$sSizeIfSupported;
+		}
+
+		if ($bDsn && $this->IsSupported('DSN'))
+		{
+			$sCmd .= ' RET=HDRS';
 		}
 
 		$this->sendRequestWithCheck('MAIL', 250, $sCmd);
@@ -334,13 +387,14 @@ class SmtpClient extends \MailSo\Net\NetClient
 
 	/**
 	 * @param string $sTo
+	 * @param bool $bDsn = false
 	 *
 	 * @return \MailSo\Smtp\SmtpClient
 	 *
 	 * @throws \MailSo\Net\Exceptions\Exception
 	 * @throws \MailSo\Smtp\Exceptions\Exception
 	 */
-	public function Rcpt($sTo)
+	public function Rcpt($sTo, $bDsn = false)
 	{
 		if (!$this->bMail)
 		{
@@ -349,8 +403,17 @@ class SmtpClient extends \MailSo\Net\NetClient
 				\MailSo\Log\Enumerations\Type::ERROR, true);
 		}
 
-		$sTo = \MailSo\Base\Utils::IdnToAscii($sTo, true);
-		$this->sendRequestWithCheck('RCPT', array(250, 251), 'TO:<'.$sTo.'>');
+		$sTo = \MailSo\Base\Utils::IdnToAscii(
+			\MailSo\Base\Utils::Trim($sTo), true);
+
+		$sCmd = 'TO:<'.$sTo.'>';
+
+		if ($bDsn && $this->IsSupported('DSN'))
+		{
+			$sCmd .= ' NOTIFY=SUCCESS,FAILURE';
+		}
+
+		$this->sendRequestWithCheck('RCPT', array(250, 251), $sCmd);
 
 		$this->bRcpt = true;
 
@@ -481,6 +544,9 @@ class SmtpClient extends \MailSo\Net\NetClient
 	 */
 	public function Vrfy($sUser)
 	{
+		$sUser = \MailSo\Base\Utils::IdnToAscii(
+			\MailSo\Base\Utils::Trim($sUser));
+
 		$this->sendRequestWithCheck('VRFY', array(250, 251, 252), $sUser);
 
 		return $this;
@@ -713,11 +779,11 @@ class SmtpClient extends \MailSo\Net\NetClient
 		do
 		{
 			$this->getNextBuffer();
-			$aParts = \preg_split('/([\s-]+)/', $this->sResponseBuffer, 2, PREG_SPLIT_DELIM_CAPTURE);
+			$aParts = \preg_split('/([\s\-]+)/', $this->sResponseBuffer, 2, PREG_SPLIT_DELIM_CAPTURE);
 
 			if (\is_array($aParts) && 3 === \count($aParts) && \is_numeric($aParts[0]))
 			{
-				if ('-' !== trim($aParts[1]) && !\in_array((int) $aParts[0], $mExpectCode))
+				if ('-' !== \substr($aParts[1], 0, 1) && !\in_array((int) $aParts[0], $mExpectCode))
 				{
 					$this->writeLogException(
 						new Exceptions\NegativeResponseException($this->aResults, \trim(
@@ -735,7 +801,7 @@ class SmtpClient extends \MailSo\Net\NetClient
 
 			$this->aResults[] = $this->sResponseBuffer;
 		}
-		while ('-' === \trim($aParts[1]));
+		while ('-' === \substr($aParts[1], 0, 1));
 
 		$this->writeLog((microtime(true) - $this->iRequestTime),
 			\MailSo\Log\Enumerations\Type::TIME);

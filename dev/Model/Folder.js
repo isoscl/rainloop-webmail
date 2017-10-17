@@ -1,28 +1,19 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {FolderType} from 'Common/Enums';
+import {isPosNumeric} from 'Common/Utils';
+import {i18n, trigger as translatorTrigger} from 'Common/Translator';
+import {getFolderInboxName} from 'Common/Cache';
+import * as Events from 'Common/Events';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Events = require('Common/Events'),
-		Translator = require('Common/Translator'),
-
-		Cache = require('Storage/User/Cache'),
-
-		AbstractModel = require('Knoin/AbstractModel')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function FolderModel()
-	{
-		AbstractModel.call(this, 'FolderModel');
+class FolderModel extends AbstractModel
+{
+	constructor() {
+		super('FolderModel');
 
 		this.name = ko.observable('');
 		this.fullName = '';
@@ -36,16 +27,16 @@
 		this.selectable = false;
 		this.existen = true;
 
-		this.type = ko.observable(Enums.FolderType.User);
+		this.type = ko.observable(FolderType.User);
 
 		this.focused = ko.observable(false);
 		this.selected = ko.observable(false);
 		this.edited = ko.observable(false);
-		this.collapsed = ko.observable(true);
 		this.subScribed = ko.observable(true);
+		this.checkable = ko.observable(false);
 		this.subFolders = ko.observableArray([]);
 		this.deleteAccess = ko.observable(false);
-		this.actionBlink = ko.observable(false).extend({'falseTimeout': 1000});
+		this.actionBlink = ko.observable(false).extend({falseTimeout: 1000});
 
 		this.nameForEdit = ko.observable('');
 
@@ -55,69 +46,54 @@
 		this.collapsedPrivate = ko.observable(true);
 	}
 
-	_.extend(FolderModel.prototype, AbstractModel.prototype);
-
 	/**
 	 * @static
-	 * @param {AjaxJsonFolder} oJsonFolder
-	 * @return {?FolderModel}
+	 * @param {AjaxJsonFolder} json
+	 * @returns {?FolderModel}
 	 */
-	FolderModel.newInstanceFromJson = function (oJsonFolder)
-	{
-		var oFolderModel = new FolderModel();
-		return oFolderModel.initByJson(oJsonFolder) ? oFolderModel.initComputed() : null;
-	};
+	static newInstanceFromJson(json) {
+		const folder = new FolderModel();
+		return folder.initByJson(json) ? folder.initComputed() : null;
+	}
 
 	/**
-	 * @return {FolderModel}
+	 * @returns {FolderModel}
 	 */
-	FolderModel.prototype.initComputed = function ()
-	{
-		var sInboxFolderName = Cache.getFolderInboxName();
+	initComputed() {
+		const inboxFolderName = getFolderInboxName();
 
-		this.hasSubScribedSubfolders = ko.computed(function () {
-			return !!_.find(this.subFolders(), function (oFolder) {
-				return oFolder.subScribed() && !oFolder.isSystemFolder();
-			});
-		}, this);
+		this.isInbox = ko.computed(() => FolderType.Inbox === this.type());
 
-		this.canBeEdited = ko.computed(function () {
-			return Enums.FolderType.User === this.type() && this.existen && this.selectable;
-		}, this);
+		this.hasSubScribedSubfolders = ko.computed(
+			() => !!_.find(this.subFolders(), (oFolder) => (oFolder.subScribed() || oFolder.hasSubScribedSubfolders()) && !oFolder.isSystemFolder())
+		);
 
-		this.visible = ko.computed(function () {
+		this.canBeEdited = ko.computed(() => FolderType.User === this.type() && this.existen && this.selectable);
 
-			var
-				bSubScribed = this.subScribed(),
-				bSubFolders = this.hasSubScribedSubfolders()
-			;
+		this.visible = ko.computed(() => {
+			const
+				isSubScribed = this.subScribed(),
+				isSubFolders = this.hasSubScribedSubfolders();
 
-			return (bSubScribed || (bSubFolders && (!this.existen || !this.selectable)));
+			return (isSubScribed || (isSubFolders && (!this.existen || !this.selectable)));
+		});
 
-		}, this);
+		this.isSystemFolder = ko.computed(() => FolderType.User !== this.type());
 
-		this.isSystemFolder = ko.computed(function () {
-			return Enums.FolderType.User !== this.type();
-		}, this);
+		this.hidden = ko.computed(() => {
+			const
+				isSystem = this.isSystemFolder(),
+				isSubFolders = this.hasSubScribedSubfolders();
 
-		this.hidden = ko.computed(function () {
-			var
-				bSystem = this.isSystemFolder(),
-				bSubFolders = this.hasSubScribedSubfolders()
-			;
+			return (isSystem && !isSubFolders) || (!this.selectable && !isSubFolders);
+		});
 
-			return (bSystem && !bSubFolders) || (!this.selectable && !bSubFolders);
-
-		}, this);
-
-		this.selectableForFolderList = ko.computed(function () {
-			return !this.isSystemFolder() && this.selectable;
-		}, this);
+		this.selectableForFolderList = ko.computed(() => !this.isSystemFolder() && this.selectable);
 
 		this.messageCountAll = ko.computed({
-			'read': this.privateMessageCountAll,
-			'write': function (iValue) {
-				if (Utils.isPosNumeric(iValue, true))
+			read: this.privateMessageCountAll,
+			write: (iValue) => {
+				if (isPosNumeric(iValue, true))
 				{
 					this.privateMessageCountAll(iValue);
 				}
@@ -125,245 +101,211 @@
 				{
 					this.privateMessageCountAll.valueHasMutated();
 				}
-			},
-			'owner': this
-		}).extend({'notify': 'always'});
+			}
+		}).extend({notify: 'always'});
 
 		this.messageCountUnread = ko.computed({
-			'read': this.privateMessageCountUnread,
-			'write': function (iValue) {
-				if (Utils.isPosNumeric(iValue, true))
+			read: this.privateMessageCountUnread,
+			write: (value) => {
+				if (isPosNumeric(value, true))
 				{
-					this.privateMessageCountUnread(iValue);
+					this.privateMessageCountUnread(value);
 				}
 				else
 				{
 					this.privateMessageCountUnread.valueHasMutated();
 				}
-			},
-			'owner': this
-		}).extend({'notify': 'always'});
+			}
+		}).extend({notify: 'always'});
 
-		this.printableUnreadCount = ko.computed(function () {
-			var
-				iCount = this.messageCountAll(),
-				iUnread = this.messageCountUnread(),
-				iType = this.type()
-			;
+		this.printableUnreadCount = ko.computed(() => {
+			const
+				count = this.messageCountAll(),
+				unread = this.messageCountUnread(),
+				type = this.type();
 
-			if (0 < iCount)
+			if (0 < count)
 			{
-				if (Enums.FolderType.Draft === iType)
+				if (FolderType.Draft === type)
 				{
-					return '' + iCount;
+					return '' + count;
 				}
-				else if (0 < iUnread && Enums.FolderType.Trash !== iType && Enums.FolderType.Archive !== iType && Enums.FolderType.SentItems !== iType)
+				else if (0 < unread && FolderType.Trash !== type && FolderType.Archive !== type && FolderType.SentItems !== type)
 				{
-					return '' + iUnread;
+					return '' + unread;
 				}
 			}
 
 			return '';
-
-		}, this);
-
-		this.canBeDeleted = ko.computed(function () {
-			var
-				bSystem = this.isSystemFolder()
-			;
-			return !bSystem && 0 === this.subFolders().length && sInboxFolderName !== this.fullNameRaw;
-		}, this);
-
-		this.canBeSubScribed = ko.computed(function () {
-			return !this.isSystemFolder() && this.selectable && sInboxFolderName !== this.fullNameRaw;
-		}, this);
-
-//		this.visible.subscribe(function () {
-//			Utils.timeOutAction('folder-list-folder-visibility-change', function () {
-//				Globals.$win.trigger('folder-list-folder-visibility-change');
-//			}, 100);
-//		});
-
-		this.localName = ko.computed(function () {
-
-			Translator.trigger();
-
-			var
-				iType = this.type(),
-				sName = this.name()
-			;
-
-			if (this.isSystemFolder())
-			{
-				switch (iType)
-				{
-					case Enums.FolderType.Inbox:
-						sName = Translator.i18n('FOLDER_LIST/INBOX_NAME');
-						break;
-					case Enums.FolderType.SentItems:
-						sName = Translator.i18n('FOLDER_LIST/SENT_NAME');
-						break;
-					case Enums.FolderType.Draft:
-						sName = Translator.i18n('FOLDER_LIST/DRAFTS_NAME');
-						break;
-					case Enums.FolderType.Spam:
-						sName = Translator.i18n('FOLDER_LIST/SPAM_NAME');
-						break;
-					case Enums.FolderType.Trash:
-						sName = Translator.i18n('FOLDER_LIST/TRASH_NAME');
-						break;
-					case Enums.FolderType.Archive:
-						sName = Translator.i18n('FOLDER_LIST/ARCHIVE_NAME');
-						break;
-				}
-			}
-
-			return sName;
-
-		}, this);
-
-		this.manageFolderSystemName = ko.computed(function () {
-
-			Translator.trigger();
-
-			var
-				sSuffix = '',
-				iType = this.type(),
-				sName = this.name()
-			;
-
-			if (this.isSystemFolder())
-			{
-				switch (iType)
-				{
-					case Enums.FolderType.Inbox:
-						sSuffix = '(' + Translator.i18n('FOLDER_LIST/INBOX_NAME') + ')';
-						break;
-					case Enums.FolderType.SentItems:
-						sSuffix = '(' + Translator.i18n('FOLDER_LIST/SENT_NAME') + ')';
-						break;
-					case Enums.FolderType.Draft:
-						sSuffix = '(' + Translator.i18n('FOLDER_LIST/DRAFTS_NAME') + ')';
-						break;
-					case Enums.FolderType.Spam:
-						sSuffix = '(' + Translator.i18n('FOLDER_LIST/SPAM_NAME') + ')';
-						break;
-					case Enums.FolderType.Trash:
-						sSuffix = '(' + Translator.i18n('FOLDER_LIST/TRASH_NAME') + ')';
-						break;
-					case Enums.FolderType.Archive:
-						sSuffix = '(' + Translator.i18n('FOLDER_LIST/ARCHIVE_NAME') + ')';
-						break;
-				}
-			}
-
-			if ('' !== sSuffix && '(' + sName + ')' === sSuffix || '(inbox)' === sSuffix.toLowerCase())
-			{
-				sSuffix = '';
-			}
-
-			return sSuffix;
-
-		}, this);
-
-		this.collapsed = ko.computed({
-			'read': function () {
-				return !this.hidden() && this.collapsedPrivate();
-			},
-			'write': function (mValue) {
-				this.collapsedPrivate(mValue);
-			},
-			'owner': this
 		});
 
-		this.hasUnreadMessages = ko.computed(function () {
-			return 0 < this.messageCountUnread();
-		}, this);
+		this.canBeDeleted = ko.computed(() => {
+			const bSystem = this.isSystemFolder();
+			return !bSystem && 0 === this.subFolders().length && inboxFolderName !== this.fullNameRaw;
+		});
 
-		this.hasSubScribedUnreadMessagesSubfolders = ko.computed(function () {
-			return !!_.find(this.subFolders(), function (oFolder) {
-				return oFolder.hasUnreadMessages() || oFolder.hasSubScribedUnreadMessagesSubfolders();
-			});
-		}, this);
+		this.canBeSubScribed = ko.computed(() => !this.isSystemFolder() && this.selectable && inboxFolderName !== this.fullNameRaw);
+
+		this.canBeChecked = this.canBeSubScribed;
+
+		this.localName = ko.computed(() => {
+
+			translatorTrigger();
+
+			let name = this.name();
+			const type = this.type();
+
+			if (this.isSystemFolder())
+			{
+				switch (type)
+				{
+					case FolderType.Inbox:
+						name = i18n('FOLDER_LIST/INBOX_NAME');
+						break;
+					case FolderType.SentItems:
+						name = i18n('FOLDER_LIST/SENT_NAME');
+						break;
+					case FolderType.Draft:
+						name = i18n('FOLDER_LIST/DRAFTS_NAME');
+						break;
+					case FolderType.Spam:
+						name = i18n('FOLDER_LIST/SPAM_NAME');
+						break;
+					case FolderType.Trash:
+						name = i18n('FOLDER_LIST/TRASH_NAME');
+						break;
+					case FolderType.Archive:
+						name = i18n('FOLDER_LIST/ARCHIVE_NAME');
+						break;
+					// no default
+				}
+			}
+
+			return name;
+		});
+
+		this.manageFolderSystemName = ko.computed(() => {
+
+			translatorTrigger();
+
+			let suffix = '';
+			const
+				type = this.type(),
+				name = this.name();
+
+			if (this.isSystemFolder())
+			{
+				switch (type)
+				{
+					case FolderType.Inbox:
+						suffix = '(' + i18n('FOLDER_LIST/INBOX_NAME') + ')';
+						break;
+					case FolderType.SentItems:
+						suffix = '(' + i18n('FOLDER_LIST/SENT_NAME') + ')';
+						break;
+					case FolderType.Draft:
+						suffix = '(' + i18n('FOLDER_LIST/DRAFTS_NAME') + ')';
+						break;
+					case FolderType.Spam:
+						suffix = '(' + i18n('FOLDER_LIST/SPAM_NAME') + ')';
+						break;
+					case FolderType.Trash:
+						suffix = '(' + i18n('FOLDER_LIST/TRASH_NAME') + ')';
+						break;
+					case FolderType.Archive:
+						suffix = '(' + i18n('FOLDER_LIST/ARCHIVE_NAME') + ')';
+						break;
+					// no default
+				}
+			}
+
+			if ('' !== suffix && '(' + name + ')' === suffix || '(inbox)' === suffix.toLowerCase())
+			{
+				suffix = '';
+			}
+
+			return suffix;
+		});
+
+		this.collapsed = ko.computed({
+			read: () => !this.hidden() && this.collapsedPrivate(),
+			write: (value) => {
+				this.collapsedPrivate(value);
+			}
+		});
+
+		this.hasUnreadMessages = ko.computed(() => 0 < this.messageCountUnread() && '' !== this.printableUnreadCount());
+
+		this.hasSubScribedUnreadMessagesSubfolders = ko.computed(
+			() => !!_.find(this.subFolders(), (folder) => folder.hasUnreadMessages() || folder.hasSubScribedUnreadMessagesSubfolders())
+		);
 
 		// subscribe
-		this.name.subscribe(function (sValue) {
-			this.nameForEdit(sValue);
-		}, this);
+		this.name.subscribe((value) => {
+			this.nameForEdit(value);
+		});
 
-		this.edited.subscribe(function (bValue) {
-			if (bValue)
+		this.edited.subscribe((value) => {
+			if (value)
 			{
 				this.nameForEdit(this.name());
 			}
-		}, this);
+		});
 
-		this.messageCountUnread.subscribe(function (iUnread) {
-			if (Enums.FolderType.Inbox === this.type())
+		this.messageCountUnread.subscribe((unread) => {
+			if (FolderType.Inbox === this.type())
 			{
-				Events.pub('mailbox.inbox-unread-count', [iUnread]);
+				Events.pub('mailbox.inbox-unread-count', [unread]);
 			}
-		}, this);
+		});
 
 		return this;
-	};
-
-	FolderModel.prototype.fullName = '';
-	FolderModel.prototype.fullNameRaw = '';
-	FolderModel.prototype.fullNameHash = '';
-	FolderModel.prototype.delimiter = '';
-	FolderModel.prototype.namespace = '';
-	FolderModel.prototype.deep = 0;
-	FolderModel.prototype.interval = 0;
+	}
 
 	/**
-	 * @return {string}
+	 * @returns {string}
 	 */
-	FolderModel.prototype.collapsedCss = function ()
-	{
+	collapsedCss() {
 		return this.hasSubScribedSubfolders() ?
 			(this.collapsed() ? 'icon-right-mini e-collapsed-sign' : 'icon-down-mini e-collapsed-sign') : 'icon-none e-collapsed-sign';
-	};
+	}
 
 	/**
-	 * @param {AjaxJsonFolder} oJsonFolder
-	 * @return {boolean}
+	 * @param {AjaxJsonFolder} json
+	 * @returns {boolean}
 	 */
-	FolderModel.prototype.initByJson = function (oJsonFolder)
-	{
-		var
-			bResult = false,
-			sInboxFolderName = Cache.getFolderInboxName()
-		;
+	initByJson(json) {
+		let bResult = false;
+		const sInboxFolderName = getFolderInboxName();
 
-		if (oJsonFolder && 'Object/Folder' === oJsonFolder['@Object'])
+		if (json && 'Object/Folder' === json['@Object'])
 		{
-			this.name(oJsonFolder.Name);
-			this.delimiter = oJsonFolder.Delimiter;
-			this.fullName = oJsonFolder.FullName;
-			this.fullNameRaw = oJsonFolder.FullNameRaw;
-			this.fullNameHash = oJsonFolder.FullNameHash;
-			this.deep = oJsonFolder.FullNameRaw.split(this.delimiter).length - 1;
-			this.selectable = !!oJsonFolder.IsSelectable;
-			this.existen = !!oJsonFolder.IsExists;
+			this.name(json.Name);
+			this.delimiter = json.Delimiter;
+			this.fullName = json.FullName;
+			this.fullNameRaw = json.FullNameRaw;
+			this.fullNameHash = json.FullNameHash;
+			this.deep = json.FullNameRaw.split(this.delimiter).length - 1;
+			this.selectable = !!json.IsSelectable;
+			this.existen = !!json.IsExists;
 
-			this.subScribed(!!oJsonFolder.IsSubscribed);
-			this.type(sInboxFolderName === this.fullNameRaw ? Enums.FolderType.Inbox : Enums.FolderType.User);
+			this.subScribed(!!json.IsSubscribed);
+			this.checkable(!!json.Checkable);
+
+			this.type(sInboxFolderName === this.fullNameRaw ? FolderType.Inbox : FolderType.User);
 
 			bResult = true;
 		}
 
 		return bResult;
-	};
+	}
 
 	/**
-	 * @return {string}
+	 * @returns {string}
 	 */
-	FolderModel.prototype.printableFullName = function ()
-	{
+	printableFullName() {
 		return this.fullName.split(this.delimiter).join(' / ');
-	};
+	}
+}
 
-	module.exports = FolderModel;
-
-}());
+export {FolderModel, FolderModel as default};

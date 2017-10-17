@@ -13,9 +13,6 @@ class RecaptchaPlugin extends \RainLoop\Plugins\AbstractPlugin
 
 		$this->addHook('ajax.action-pre-call', 'AjaxActionPreCall');
 		$this->addHook('filter.ajax-response', 'FilterAjaxResponse');
-
-		$this->addTemplate('templates/PluginLoginReCaptchaGroup.html');
-		$this->addTemplateHook('Login', 'BottomControlGroup', 'PluginLoginReCaptchaGroup');
 	}
 
 	/**
@@ -88,10 +85,13 @@ class RecaptchaPlugin extends \RainLoop\Plugins\AbstractPlugin
 		{
 			$bResult = false;
 
-			$sResult = $this->Manager()->Actions()->Http()->GetUrlAsString(
-				'https://www.google.com/recaptcha/api/siteverify?secret='.
-					\urlencode($this->Config()->Get('plugin', 'private_key', '')).'&response='.
-					\urlencode($this->Manager()->Actions()->GetActionParam('RecaptchaResponse', '')));
+			$sResult = $this->Manager()->Actions()->Http()->SendPostRequest(
+				'https://www.google.com/recaptcha/api/siteverify',
+				array(
+					'secret' => $this->Config()->Get('plugin', 'private_key', ''),
+					'response' => $this->Manager()->Actions()->GetActionParam('RecaptchaResponse', '')
+				)
+			);
 
 			if ($sResult)
 			{
@@ -120,7 +120,7 @@ class RecaptchaPlugin extends \RainLoop\Plugins\AbstractPlugin
 		{
 			$oCacher = $this->Manager()->Actions()->Cacher();
 			$iConfigLimit = (int) $this->Config()->Get('plugin', 'error_limit', 0);
-			
+
 			$sKey = $this->getCaptchaCacherKey();
 
 			if (0 < $iConfigLimit && $oCacher && $oCacher->IsInited())

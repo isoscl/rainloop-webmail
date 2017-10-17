@@ -1,30 +1,26 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {StorageResultType, Notification} from 'Common/Enums';
+import {trim, isNormal} from 'Common/Utils';
+import {getNotification} from 'Common/Translator';
+import {HtmlEditor} from 'Common/HtmlEditor';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import Remote from 'Remote/User/Ajax';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
-		HtmlEditor = require('Common/HtmlEditor'),
+import {getApp} from 'Helper/Apps/User';
 
-		Remote = require('Storage/User/Remote'),
+import {popup, command} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function TemplatePopupView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsTemplate');
+@popup({
+	name: 'View/Popup/Template',
+	templateID: 'PopupsTemplate'
+})
+class TemplatePopupView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
 		this.editor = null;
 		this.signatureDom = ko.observable(null);
@@ -39,68 +35,59 @@
 		this.body.loading = ko.observable(false);
 		this.body.error = ko.observable(false);
 
-		this.name.subscribe(function () {
+		this.name.subscribe(() => {
 			this.name.error(false);
-		}, this);
+		});
 
-		this.body.subscribe(function () {
+		this.body.subscribe(() => {
 			this.body.error(false);
-		}, this);
+		});
 
 		this.submitRequest = ko.observable(false);
 		this.submitError = ko.observable('');
-
-		this.addTemplateCommand = Utils.createCommand(this, function () {
-
-			this.populateBodyFromEditor();
-
-			this.name.error('' === Utils.trim(this.name()));
-			this.body.error('' === Utils.trim(this.body()) ||
-				':HTML:' === Utils.trim(this.body()));
-
-			if (this.name.error() || this.body.error())
-			{
-				return false;
-			}
-
-			this.submitRequest(true);
-
-			Remote.templateSetup(_.bind(function (sResult, oData) {
-
-				this.submitRequest(false);
-				if (Enums.StorageResultType.Success === sResult && oData)
-				{
-					if (oData.Result)
-					{
-						require('App/User').templates();
-						this.cancelCommand();
-					}
-					else if (oData.ErrorCode)
-					{
-						this.submitError(Translator.getNotification(oData.ErrorCode));
-					}
-				}
-				else
-				{
-					this.submitError(Translator.getNotification(Enums.Notification.UnknownError));
-				}
-
-			}, this), this.id(), this.name(), this.body());
-
-			return true;
-
-		}, function () {
-			return !this.submitRequest();
-		});
-
-		kn.constructorEnd(this);
 	}
 
-	kn.extendAsViewModel(['View/Popup/Template'], TemplatePopupView);
-	_.extend(TemplatePopupView.prototype, AbstractView.prototype);
+	@command((self) => !self.submitRequest())
+	addTemplateCommand() {
 
-	TemplatePopupView.prototype.clearPopup = function ()
-	{
+		this.populateBodyFromEditor();
+
+		this.name.error('' === trim(this.name()));
+		this.body.error('' === trim(this.body()) || ':HTML:' === trim(this.body()));
+
+		if (this.name.error() || this.body.error())
+		{
+			return false;
+		}
+
+		this.submitRequest(true);
+
+		Remote.templateSetup((result, data) => {
+
+			this.submitRequest(false);
+			if (StorageResultType.Success === result && data)
+			{
+				if (data.Result)
+				{
+					getApp().templates();
+					this.cancelCommand();
+				}
+				else if (data.ErrorCode)
+				{
+					this.submitError(getNotification(data.ErrorCode));
+				}
+			}
+			else
+			{
+				this.submitError(getNotification(Notification.UnknownError));
+			}
+
+		}, this.id(), this.name(), this.body());
+
+		return true;
+	}
+
+	clearPopup() {
 		this.id('');
 
 		this.name('');
@@ -115,108 +102,84 @@
 
 		if (this.editor)
 		{
-			this.setBody('');
+			this.editor.setPlain('', false);
 		}
-	};
+	}
 
-	TemplatePopupView.prototype.setBody = function (sBody)
-	{
+	populateBodyFromEditor() {
 		if (this.editor)
 		{
-			if (':HTML:' === sBody.substr(0, 6))
-			{
-				this.editor.setHtml(sBody.substr(6), false);
-			}
-			else
-			{
-				this.editor.setPlain(sBody, false);
-			}
+			this.body(this.editor.getDataWithHtmlMark());
 		}
-	};
+	}
 
-	TemplatePopupView.prototype.populateBodyFromEditor = function ()
-	{
-		if (this.editor)
-		{
-			this.body(
-				(this.editor.isHtml() ? ':HTML:' : '') + this.editor.getData()
-			);
-		}
-	};
-
-	TemplatePopupView.prototype.editorSetBody = function (sBody)
-	{
+	editorSetBody(sBody) {
 		if (!this.editor && this.signatureDom())
 		{
-			var self = this;
-			this.editor = new HtmlEditor(self.signatureDom(), function () {
-				self.populateBodyFromEditor();
-			}, function () {
-				self.setBody(sBody);
+			this.editor = new HtmlEditor(this.signatureDom(), () => {
+				this.populateBodyFromEditor();
+			}, () => {
+				this.editor.setHtmlOrPlain(sBody);
 			});
 		}
 		else
 		{
-			this.setBody(sBody);
+			this.editor.setHtmlOrPlain(sBody);
 		}
-	};
+	}
 
-	TemplatePopupView.prototype.onShow = function (oTemplate)
-	{
-		var self = this;
+	onShow(template) {
 
 		this.clearPopup();
 
-		if (oTemplate && oTemplate.id)
+		if (template && template.id)
 		{
-			this.id(oTemplate.id);
-			this.name(oTemplate.name);
-			this.body(oTemplate.body);
+			this.id(template.id);
+			this.name(template.name);
+			this.body(template.body);
 
-			if (oTemplate.populated)
+			if (template.populated)
 			{
-				self.editorSetBody(this.body());
+				this.editorSetBody(this.body());
 			}
 			else
 			{
 				this.body.loading(true);
-				self.body.error(false);
+				this.body.error(false);
 
-				Remote.templateGetById(function (sResult, oData) {
+				Remote.templateGetById((result, data) => {
 
-					self.body.loading(false);
+					this.body.loading(false);
 
-					if (Enums.StorageResultType.Success === sResult && oData && oData.Result &&
-						'Object/Template' === oData.Result['@Object'] && Utils.isNormal(oData.Result['Body']))
+					if (StorageResultType.Success === result && data && data.Result &&
+						'Object/Template' === data.Result['@Object'] && isNormal(data.Result.Body))
 					{
-						oTemplate.body = oData.Result['Body'];
-						oTemplate.populated = true;
+						template.body = data.Result.Body;
+						template.populated = true;
 
-						self.body(oTemplate.body);
-						self.body.error(false);
+						this.body(template.body);
+						this.body.error(false);
 					}
 					else
 					{
-						self.body('');
-						self.body.error(true);
+						this.body('');
+						this.body.error(true);
 					}
 
-					self.editorSetBody(self.body());
+					this.editorSetBody(this.body());
 
 				}, this.id());
 			}
 		}
 		else
 		{
-			self.editorSetBody('');
+			this.editorSetBody('');
 		}
-	};
+	}
 
-	TemplatePopupView.prototype.onFocus = function ()
-	{
+	onShowWithDelay() {
 		this.name.focus(true);
-	};
+	}
+}
 
-	module.exports = TemplatePopupView;
-
-}());
+export {TemplatePopupView, TemplatePopupView as default};

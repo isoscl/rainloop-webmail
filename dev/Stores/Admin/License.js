@@ -1,17 +1,9 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
-
-	var
-		ko = require('ko')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function LicenseAdminStore()
-	{
+class LicenseAdminStore
+{
+	constructor() {
 		this.licensing = ko.observable(false);
 		this.licensingProcess = ko.observable(false);
 		this.licenseValid = ko.observable(false);
@@ -20,7 +12,6 @@
 
 		this.licenseTrigger = ko.observable(false);
 	}
+}
 
-	module.exports = new LicenseAdminStore();
-
-}());
+export default new LicenseAdminStore();

@@ -1,28 +1,21 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {windowResizeCallback, isArray, trim, delegateRunOnDestroy} from 'Common/Utils';
+import {StorageResultType, Notification} from 'Common/Enums';
+import {getNotification} from 'Common/Translator';
 
-	var
-		ko = require('ko'),
-		_ = require('_'),
+import FilterStore from 'Stores/User/Filter';
+import Remote from 'Remote/User/Ajax';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import {FilterModel} from 'Model/Filter';
 
-		FilterStore = require('Stores/User/Filter'),
+import {showScreenPopup, command} from 'Knoin/Knoin';
 
-		Remote = require('Storage/User/Remote')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function FiltersUserSettings()
-	{
-		var self = this;
-
+class FiltersUserSettings
+{
+	constructor() {
 		this.modules = FilterStore.modules;
 		this.filters = FilterStore.filters;
 
@@ -31,15 +24,12 @@
 		this.serverErrorDesc = ko.observable('');
 		this.haveChanges = ko.observable(false);
 
-		this.processText = ko.observable('');
 		this.saveErrorText = ko.observable('');
 
-		this.visibility = ko.observable(false);
+		this.filters.subscribe(windowResizeCallback);
 
-		this.filters.subscribe(Utils.windowResizeCallback);
-
-		this.serverError.subscribe(function (bValue) {
-			if (!bValue)
+		this.serverError.subscribe((value) => {
+			if (!value)
 			{
 				this.serverErrorDesc('');
 			}
@@ -51,198 +41,165 @@
 		this.filterRaw.allow = ko.observable(false);
 		this.filterRaw.error = ko.observable(false);
 
-		this.processText = ko.computed(function () {
-			return this.filters.loading() ? Translator.i18n('SETTINGS_FILTERS/LOADING_PROCESS') : '';
-		}, this);
+		this.filterForDeletion = ko.observable(null).deleteAccessHelper();
 
-		this.visibility = ko.computed(function () {
-			return '' === this.processText() ? 'hidden' : 'visible';
-		}, this);
-
-		this.filterForDeletion = ko.observable(null).extend({'falseTimeout': 3000}).extend(
-			{'toggleSubscribeProperty': [this, 'deleteAccess']});
-
-		this.saveChanges = Utils.createCommand(this, function () {
-
-			if (!this.filters.saving())
-			{
-				if (this.filterRaw.active() && '' === Utils.trim(this.filterRaw()))
-				{
-					this.filterRaw.error(true);
-					return false;
-				}
-
-				this.filters.saving(true);
-				this.saveErrorText('');
-
-				Remote.filtersSave(function (sResult, oData) {
-
-					self.filters.saving(false);
-
-					if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
-					{
-						self.haveChanges(false);
-						self.updateList();
-					}
-					else
-					{
-						self.saveErrorText(oData && oData.ErrorCode ? Translator.getNotification(oData.ErrorCode) :
-							Translator.getNotification(Enums.Notification.CantSaveFilters));
-					}
-
-				}, this.filters(), this.filterRaw(), this.filterRaw.active());
-			}
-
-			return true;
-
-		}, function () {
-			return this.haveChanges();
+		this.filters.subscribe(() => {
+			this.haveChanges(true);
 		});
 
-		this.filters.subscribe(function () {
-			this.haveChanges(true);
-		}, this);
-
-		this.filterRaw.subscribe(function () {
+		this.filterRaw.subscribe(() => {
 			this.haveChanges(true);
 			this.filterRaw.error(false);
-		}, this);
+		});
 
-		this.filterRaw.active.subscribe(function () {
+		this.haveChanges.subscribe(() => {
+			this.saveErrorText('');
+		});
+
+		this.filterRaw.active.subscribe(() => {
 			this.haveChanges(true);
 			this.filterRaw.error(false);
-		}, this);
+		});
 	}
 
-	FiltersUserSettings.prototype.scrollableOptions = function ()
-	{
+	@command((self) => self.haveChanges())
+	saveChangesCommand() {
+		if (!this.filters.saving())
+		{
+			if (this.filterRaw.active() && '' === trim(this.filterRaw()))
+			{
+				this.filterRaw.error(true);
+				return false;
+			}
+
+			this.filters.saving(true);
+			this.saveErrorText('');
+
+			Remote.filtersSave((result, data) => {
+				this.filters.saving(false);
+
+				if (StorageResultType.Success === result && data && data.Result)
+				{
+					this.haveChanges(false);
+					this.updateList();
+				}
+				else if (data && data.ErrorCode)
+				{
+					this.saveErrorText(data.ErrorMessageAdditional || getNotification(data.ErrorCode));
+				}
+				else
+				{
+					this.saveErrorText(getNotification(Notification.CantSaveFilters));
+				}
+
+			}, this.filters(), this.filterRaw(), this.filterRaw.active());
+		}
+
+		return true;
+	}
+
+	scrollableOptions(wrapper) {
 		return {
-			handle: '.drag-handle'
+			handle: '.drag-handle',
+			containment: wrapper || 'parent',
+			axis: 'y'
 		};
-	};
+	}
 
-	FiltersUserSettings.prototype.updateList = function ()
-	{
-		var
-			self = this,
-			FilterModel = require('Model/Filter')
-		;
-
+	updateList() {
 		if (!this.filters.loading())
 		{
 			this.filters.loading(true);
 
-			Remote.filtersGet(function (sResult, oData) {
+			Remote.filtersGet((result, data) => {
 
-				self.filters.loading(false);
-				self.serverError(false);
+				this.filters.loading(false);
+				this.serverError(false);
 
-				if (Enums.StorageResultType.Success === sResult && oData &&
-					oData.Result && Utils.isArray(oData.Result.Filters))
+				if (StorageResultType.Success === result && data && data.Result && isArray(data.Result.Filters))
 				{
-					self.inited(true);
-					self.serverError(false);
+					this.inited(true);
+					this.serverError(false);
 
-					var aResult = _.compact(_.map(oData.Result.Filters, function (aItem) {
-						var oNew = new FilterModel();
-						return (oNew && oNew.parse(aItem)) ? oNew : null;
-					}));
+					this.filters(_.compact(_.map(data.Result.Filters, (aItem) => {
+						const filter = new FilterModel();
+						return (filter && filter.parse(aItem)) ? filter : null;
+					})));
 
-					self.filters(aResult);
+					this.modules(data.Result.Modules ? data.Result.Modules : {});
 
-					self.modules(oData.Result.Modules ? oData.Result.Modules : {});
-
-					self.filterRaw(oData.Result.Raw || '');
-					self.filterRaw.capa(Utils.isArray(oData.Result.Capa) ? oData.Result.Capa.join(' ') : '');
-					self.filterRaw.active(!!oData.Result.RawIsActive);
-					self.filterRaw.allow(!!oData.Result.RawIsAllow);
+					this.filterRaw(data.Result.Raw || '');
+					this.filterRaw.capa(isArray(data.Result.Capa) ? data.Result.Capa.join(' ') : '');
+					this.filterRaw.active(!!data.Result.RawIsActive);
+					this.filterRaw.allow(!!data.Result.RawIsAllow);
 				}
 				else
 				{
-					self.filters([]);
-					self.modules({});
-					self.filterRaw('');
-					self.filterRaw.capa({});
+					this.filters([]);
+					this.modules({});
+					this.filterRaw('');
+					this.filterRaw.capa({});
 
-					self.serverError(true);
-					self.serverErrorDesc(oData && oData.ErrorCode ? Translator.getNotification(oData.ErrorCode) :
-						Translator.getNotification(Enums.Notification.CantGetFilters));
+					this.serverError(true);
+					this.serverErrorDesc(data && data.ErrorCode ? getNotification(data.ErrorCode) : getNotification(Notification.CantGetFilters));
 				}
 
-				self.haveChanges(false);
+				this.haveChanges(false);
 			});
 		}
-	};
+	}
 
-	FiltersUserSettings.prototype.deleteFilter = function (oFilter)
-	{
-		this.filters.remove(oFilter);
-		Utils.delegateRunOnDestroy(oFilter);
-	};
+	deleteFilter(filter) {
+		this.filters.remove(filter);
+		delegateRunOnDestroy(filter);
+	}
 
-	FiltersUserSettings.prototype.addFilter = function ()
-	{
-		var
-			self = this,
-			FilterModel = require('Model/Filter'),
-			oNew = new FilterModel()
-		;
+	addFilter() {
+		const filter = new FilterModel();
 
-		oNew.generateID();
-		require('Knoin/Knoin').showScreenPopup(
-			require('View/Popup/Filter'), [oNew, function  () {
-				self.filters.push(oNew);
-				self.filterRaw.active(false);
-			}, false]);
-	};
+		filter.generateID();
+		showScreenPopup(require('View/Popup/Filter'), [filter, () => {
+			this.filters.push(filter);
+			this.filterRaw.active(false);
+		}, false]);
+	}
 
-	FiltersUserSettings.prototype.editFilter = function (oEdit)
-	{
-		var
-			self = this,
-			oCloned = oEdit.cloneSelf()
-		;
+	editFilter(filter) {
+		const clonedFilter = filter.cloneSelf();
 
-		require('Knoin/Knoin').showScreenPopup(
-			require('View/Popup/Filter'), [oCloned, function  () {
+		showScreenPopup(require('View/Popup/Filter'), [clonedFilter, () => {
+			const
+				filters = this.filters(),
+				index = filters.indexOf(filter);
 
-				var
-					aFilters = self.filters(),
-					iIndex = aFilters.indexOf(oEdit)
-				;
+			if (-1 < index && filters[index])
+			{
+				delegateRunOnDestroy(filters[index]);
+				filters[index] = clonedFilter;
 
-				if (-1 < iIndex && aFilters[iIndex])
-				{
-					Utils.delegateRunOnDestroy(aFilters[iIndex]);
-					aFilters[iIndex] = oCloned;
+				this.filters(filters);
+				this.haveChanges(true);
+			}
+		}, true]);
+	}
 
-					self.filters(aFilters);
-					self.haveChanges(true);
-				}
+	onBuild(oDom) {
 
-			}, true]);
-	};
-
-	FiltersUserSettings.prototype.onBuild = function (oDom)
-	{
-		var self = this;
+		const self = this;
 
 		oDom
-			.on('click', '.filter-item .e-action', function () {
-				var oFilterItem = ko.dataFor(this);
-				if (oFilterItem)
+			.on('click', '.filter-item .e-action', function() { // eslint-disable-line prefer-arrow-callback
+				const filter = ko.dataFor(this); // eslint-disable-line no-invalid-this
+				if (filter)
 				{
-					self.editFilter(oFilterItem);
+					self.editFilter(filter);
 				}
-			})
-		;
-	};
+			});
+	}
 
-	FiltersUserSettings.prototype.onShow = function ()
-	{
+	onShow() {
 		this.updateList();
-	};
+	}
+}
 
-	module.exports = FiltersUserSettings;
-
-}());
+export {FiltersUserSettings, FiltersUserSettings as default};

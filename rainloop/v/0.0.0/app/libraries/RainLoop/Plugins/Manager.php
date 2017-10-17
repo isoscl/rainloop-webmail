@@ -192,7 +192,7 @@ class Manager
 	 *
 	 * @return string
 	 */
-	private function convertPluginFolderNameToClassName($sFolderName)
+	public function convertPluginFolderNameToClassName($sFolderName)
 	{
 		$aParts = \array_map('ucfirst', \array_map('strtolower',
 			\explode(' ', \preg_replace('/[^a-z0-9]+/', ' ', $sFolderName))));
@@ -220,6 +220,23 @@ class Manager
 		}
 
 		return $sResult;
+	}
+
+	/**
+	 * @param bool $bAdminScope = false
+	 *
+	 * @return bool
+	 */
+	public function HaveJs($bAdminScope = false)
+	{
+		$bResult = false;
+
+		if ($this->bIsEnabled)
+		{
+			$bResult = $bAdminScope ? 0 < \count($this->aAdminJs) : 0 < \count($this->aJs);
+		}
+
+		return $bResult;
 	}
 
 	/**
@@ -257,27 +274,24 @@ class Manager
 	}
 
 	/**
+	 * @param array $aList
 	 * @param bool $bAdminScope = false
 	 * @return string
 	 */
-	public function CompileTemplate($bAdminScope = false)
+	public function CompileTemplate(&$aList, $bAdminScope = false)
 	{
-		$sResult = '';
 		if ($this->bIsEnabled)
 		{
 			$aTemplates = $bAdminScope ? $this->aAdminTemplates : $this->aTemplates;
 			foreach ($aTemplates as $sFile)
 			{
-				if (file_exists($sFile))
+				if (\file_exists($sFile))
 				{
-					$sTemplateName = substr(basename($sFile), 0, -5);
-					$sResult .= '<script id="'.preg_replace('/[^a-zA-Z0-9]/', '', $sTemplateName).'" type="text/html" data-cfasync="false">'.
-						$this->Actions()->ProcessTemplate($sTemplateName, file_get_contents($sFile)).'</script>';
+					$sTemplateName = \substr(\basename($sFile), 0, -5);
+					$aList[$sTemplateName] = $sFile;
 				}
 			}
 		}
-
-		return $sResult;
 	}
 
 	/**
@@ -515,19 +529,19 @@ class Manager
 
 	/**
 	 * @param string $sActionName
-	 * @param mixed $mCallbak
+	 * @param mixed $mCallback
 	 *
 	 * @return \RainLoop\Plugins\Manager
 	 */
-	public function AddAdditionalAjaxAction($sActionName, $mCallbak)
+	public function AddAdditionalAjaxAction($sActionName, $mCallback)
 	{
-		if ($this->bIsEnabled && \is_callable($mCallbak) && 0 < \strlen($sActionName))
+		if ($this->bIsEnabled && \is_callable($mCallback) && 0 < \strlen($sActionName))
 		{
-			$sActionName = 'Do'.$sActionName;
+			$sActionName = 'DoPlugin'.$sActionName;
 
 			if (!isset($this->aAdditionalAjax[$sActionName]))
 			{
-				$this->aAdditionalAjax[$sActionName] = $mCallbak;
+				$this->aAdditionalAjax[$sActionName] = $mCallback;
 			}
 		}
 
@@ -556,6 +570,82 @@ class Manager
 			if (isset($this->aAdditionalAjax[$sActionName]))
 			{
 				return \call_user_func($this->aAdditionalAjax[$sActionName]);
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * @param string $sFunctionName
+	 * @param mixed $mData
+	 *
+	 * @return mixed
+	 */
+	public function AjaxResponseHelper($sFunctionName, $mData)
+	{
+		return $this->oActions->DefaultResponse($sFunctionName, $mData);
+	}
+
+	/**
+	 * @param string $sPluginName
+	 *
+	 * @return array
+	 */
+	public function GetUserPluginSettings($sPluginName)
+	{
+		$oAccount = $this->oActions->GetAccount();
+		if ($oAccount)
+		{
+			$oSettings = $this->oActions->SettingsProvider()->Load($oAccount);
+			if ($oSettings)
+			{
+				$aData = $oSettings->GetConf('Plugins', array());
+				if (isset($aData[$sPluginName]) && \is_array($aData[$sPluginName]))
+				{
+					return $aData[$sPluginName];
+				}
+			}
+		}
+
+		return array();
+	}
+
+	/**
+	 * @param string $sPluginName
+	 * @param array $aSettings
+	 *
+	 * @return bool
+	 */
+	public function SaveUserPluginSettings($sPluginName, $aSettings)
+	{
+		$oAccount = $this->oActions->GetAccount();
+		if ($oAccount && \is_array($aSettings))
+		{
+			$oSettings = $this->oActions->SettingsProvider()->Load($oAccount);
+			if ($oSettings)
+			{
+				$aData = $oSettings->GetConf('Plugins', array());
+				if (!\is_array($aData))
+				{
+					$aData = array();
+				}
+
+				$aPluginSettings = array();
+				if (isset($aData[$sPluginName]) && \is_array($aData[$sPluginName]))
+				{
+					$aPluginSettings = $aData[$sPluginName];
+				}
+
+				foreach ($aSettings as $sKey => $mValue)
+				{
+					$aPluginSettings[$sKey] = $mValue;
+				}
+
+				$aData[$sPluginName] = $aPluginSettings;
+				$oSettings->SetConf('Plugins',$aData);
+
+				return $this->oActions->SettingsProvider()->Save($oAccount, $oSettings);
 			}
 		}
 

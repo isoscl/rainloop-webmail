@@ -1,65 +1,43 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
+import {isUnd} from 'Common/Utils';
+import {AbstractComponent} from 'Component/Abstract';
 
-	'use strict';
-
-	var
-		_ = require('_'),
-		ko = require('ko'),
-
-		Utils = require('Common/Utils'),
-
-		AbstractComponent = require('Component/Abstract')
-	;
-
+class AbstracRadio extends AbstractComponent
+{
 	/**
-	 * @constructor
-	 *
-	 * @param {Object} oParams
-	 *
-	 * @extends AbstractComponent
+	 * @param {Object} params
 	 */
-	function AbstracRadio(oParams)
-	{
-		AbstractComponent.call(this);
+	constructor(params) {
+
+		super();
 
 		this.values = ko.observableArray([]);
 
-		this.value = oParams.value;
-		if (Utils.isUnd(this.value) || !this.value.subscribe)
+		this.value = params.value;
+		if (isUnd(this.value) || !this.value.subscribe)
 		{
 			this.value = ko.observable('');
 		}
 
-		this.inline = Utils.isUnd(oParams.inline) ? false : oParams.inline;
-		this.readOnly = Utils.isUnd(oParams.readOnly) ? false : !!oParams.readOnly;
+		this.inline = isUnd(params.inline) ? false : params.inline;
+		this.readOnly = isUnd(params.readOnly) ? false : !!params.readOnly;
 
-		if (oParams.values)
+		if (params.values)
 		{
-			var aValues = _.map(oParams.values, function (sLabel, sValue) {
-				return {
-					'label': sLabel,
-					'value': sValue
-				};
-			});
-
-			this.values(aValues);
+			this.values(_.map(params.values, (label, value) => ({label: label, value: value})));
 		}
 
 		this.click = _.bind(this.click, this);
 	}
 
-	AbstracRadio.prototype.click = function(oValue) {
-		if (!this.readOnly && oValue)
+	click(value) {
+		if (!this.readOnly && value)
 		{
-			this.value(oValue.value);
+			this.value(value.value);
 		}
-	};
+	}
+}
 
-	_.extend(AbstracRadio.prototype, AbstractComponent.prototype);
-
-	AbstracRadio.componentExportHelper = AbstractComponent.componentExportHelper;
-
-	module.exports = AbstracRadio;
-
-}());
+export {AbstracRadio, AbstracRadio as default};

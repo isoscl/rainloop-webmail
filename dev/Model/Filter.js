@@ -1,29 +1,21 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {FilterRulesType, FiltersAction} from 'Common/Enums';
+import {pString, inArray, isNonEmptyArray, fakeMd5, delegateRunOnDestroy, windowResizeCallback} from 'Common/Utils';
+import {i18n} from 'Common/Translator';
+import {getFolderFromCacheList} from 'Common/Cache';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import AccountStore from 'Stores/User/Account';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import {FilterConditionModel} from 'Model/FilterCondition';
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-		Cache = require('Storage/User/Cache'),
-
-		FilterConditionModel = require('Model/FilterCondition'),
-
-		AbstractModel = require('Knoin/AbstractModel')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function FilterModel()
-	{
-		AbstractModel.call(this, 'FilterModel');
+class FilterModel extends AbstractModel
+{
+	constructor() {
+		super('FilterModel');
 
 		this.enabled = ko.observable(true);
 
@@ -34,7 +26,7 @@
 		this.name.focused = ko.observable(false);
 
 		this.conditions = ko.observableArray([]);
-		this.conditionsType = ko.observable(Enums.FilterRulesType.Any);
+		this.conditionsType = ko.observable(FilterRulesType.Any);
 
 		// Actions
 		this.actionValue = ko.observable('');
@@ -43,99 +35,99 @@
 		this.actionValueSecond = ko.observable('');
 		this.actionValueThird = ko.observable('');
 
+		this.actionValueFourth = ko.observable('');
+		this.actionValueFourth.error = ko.observable(false);
+
 		this.actionMarkAsRead = ko.observable(false);
 
 		this.actionKeep = ko.observable(true);
 		this.actionNoStop = ko.observable(false);
 
-		this.actionType = ko.observable(Enums.FiltersAction.MoveTo);
+		this.actionType = ko.observable(FiltersAction.MoveTo);
 
-		this.actionType.subscribe(function () {
+		this.actionType.subscribe(() => {
 			this.actionValue('');
 			this.actionValue.error(false);
 			this.actionValueSecond('');
 			this.actionValueThird('');
-		}, this);
+			this.actionValueFourth('');
+			this.actionValueFourth.error(false);
+		});
 
-		var fGetRealFolderName = function (sFolderFullNameRaw) {
-			var oFolder = Cache.getFolderFromCacheList(sFolderFullNameRaw);
-			return oFolder ? oFolder.fullName.replace(
-				'.' === oFolder.delimiter ? /\./ : /[\\\/]+/, ' / ') : sFolderFullNameRaw;
+		const fGetRealFolderName = (folderFullNameRaw) => {
+			const folder = getFolderFromCacheList(folderFullNameRaw);
+			return folder ? folder.fullName.replace('.' === folder.delimiter ? /\./ : /[\\\/]+/, ' / ') : folderFullNameRaw;
 		};
 
-		this.nameSub = ko.computed(function () {
-
-			var
-				sResult = '',
-				sActionValue = this.actionValue()
-			;
+		this.nameSub = ko.computed(() => {
+			let result = '';
+			const actionValue = this.actionValue();
 
 			switch (this.actionType())
 			{
-				case Enums.FiltersAction.MoveTo:
-					sResult = Translator.i18n('SETTINGS_FILTERS/SUBNAME_MOVE_TO', {
-						'FOLDER': fGetRealFolderName(sActionValue)
+				case FiltersAction.MoveTo:
+					result = i18n('SETTINGS_FILTERS/SUBNAME_MOVE_TO', {
+						FOLDER: fGetRealFolderName(actionValue)
 					});
 					break;
-				case Enums.FiltersAction.Forward:
-					sResult = Translator.i18n('SETTINGS_FILTERS/SUBNAME_FORWARD_TO', {
-						'EMAIL': sActionValue
+				case FiltersAction.Forward:
+					result = i18n('SETTINGS_FILTERS/SUBNAME_FORWARD_TO', {
+						EMAIL: actionValue
 					});
 					break;
-				case Enums.FiltersAction.Vacation:
-					sResult = Translator.i18n('SETTINGS_FILTERS/SUBNAME_VACATION_MESSAGE');
+				case FiltersAction.Vacation:
+					result = i18n('SETTINGS_FILTERS/SUBNAME_VACATION_MESSAGE');
 					break;
-				case Enums.FiltersAction.Reject:
-					sResult = Translator.i18n('SETTINGS_FILTERS/SUBNAME_REJECT');
+				case FiltersAction.Reject:
+					result = i18n('SETTINGS_FILTERS/SUBNAME_REJECT');
 					break;
-				case Enums.FiltersAction.Discard:
-					sResult = Translator.i18n('SETTINGS_FILTERS/SUBNAME_DISCARD');
+				case FiltersAction.Discard:
+					result = i18n('SETTINGS_FILTERS/SUBNAME_DISCARD');
 					break;
+				// no default
 			}
 
-			return sResult ? '(' + sResult + ')' : '';
+			return result ? '(' + result + ')' : '';
+		});
 
-		}, this);
+		this.actionTemplate = ko.computed(() => {
+			let result = '';
 
-		this.actionTemplate = ko.computed(function () {
-
-			var sTemplate = '';
 			switch (this.actionType())
 			{
+				case FiltersAction.Forward:
+					result = 'SettingsFiltersActionForward';
+					break;
+				case FiltersAction.Vacation:
+					result = 'SettingsFiltersActionVacation';
+					break;
+				case FiltersAction.Reject:
+					result = 'SettingsFiltersActionReject';
+					break;
+				case FiltersAction.None:
+					result = 'SettingsFiltersActionNone';
+					break;
+				case FiltersAction.Discard:
+					result = 'SettingsFiltersActionDiscard';
+					break;
+				case FiltersAction.MoveTo:
 				default:
-				case Enums.FiltersAction.MoveTo:
-					sTemplate = 'SettingsFiltersActionMoveToFolder';
-					break;
-				case Enums.FiltersAction.Forward:
-					sTemplate = 'SettingsFiltersActionForward';
-					break;
-				case Enums.FiltersAction.Vacation:
-					sTemplate = 'SettingsFiltersActionVacation';
-					break;
-				case Enums.FiltersAction.Reject:
-					sTemplate = 'SettingsFiltersActionReject';
-					break;
-				case Enums.FiltersAction.None:
-					sTemplate = 'SettingsFiltersActionNone';
-					break;
-				case Enums.FiltersAction.Discard:
-					sTemplate = 'SettingsFiltersActionDiscard';
+					result = 'SettingsFiltersActionMoveToFolder';
 					break;
 			}
 
-			return sTemplate;
+			return result;
+		});
 
-		}, this);
+		this.regDisposables(this.conditions.subscribe(windowResizeCallback));
 
-		this.regDisposables(this.conditions.subscribe(Utils.windowResizeCallback));
-
-		this.regDisposables(this.name.subscribe(function (sValue) {
+		this.regDisposables(this.name.subscribe((sValue) => {
 			this.name.error('' === sValue);
-		}, this));
+		}));
 
-		this.regDisposables(this.actionValue.subscribe(function (sValue) {
+		this.regDisposables(this.actionValue.subscribe((sValue) => {
 			this.actionValue.error('' === sValue);
-		}, this));
+		}));
 
 		this.regDisposables([this.actionNoStop, this.actionTemplate]);
 
@@ -143,15 +135,11 @@
 		this.canBeDeleted = ko.observable(true);
 	}
 
-	_.extend(FilterModel.prototype, AbstractModel.prototype);
+	generateID() {
+		this.id = fakeMd5();
+	}
 
-	FilterModel.prototype.generateID = function ()
-	{
-		this.id = Utils.fakeMd5();
-	};
-
-	FilterModel.prototype.verify = function ()
-	{
+	verify() {
 		if ('' === this.name())
 		{
 			this.name.error(true);
@@ -160,9 +148,7 @@
 
 		if (0 < this.conditions().length)
 		{
-			if (_.find(this.conditions(), function (oCond) {
-				return oCond && !oCond.verify();
-			}))
+			if (_.find(this.conditions(), (cond) => cond && !cond.verify()))
 			{
 				return false;
 			}
@@ -170,11 +156,8 @@
 
 		if ('' === this.actionValue())
 		{
-			if (-1 < Utils.inArray(this.actionType(), [
-				Enums.FiltersAction.MoveTo,
-				Enums.FiltersAction.Forward,
-				Enums.FiltersAction.Reject,
-				Enums.FiltersAction.Vacation
+			if (-1 < inArray(this.actionType(), [
+				FiltersAction.MoveTo, FiltersAction.Forward, FiltersAction.Reject, FiltersAction.Vacation
 			]))
 			{
 				this.actionValue.error(true);
@@ -182,10 +165,18 @@
 			}
 		}
 
-		if (Enums.FiltersAction.Forward === this.actionType() &&
+		if (FiltersAction.Forward === this.actionType() &&
 			-1 === this.actionValue().indexOf('@'))
 		{
 			this.actionValue.error(true);
+			return false;
+		}
+
+		if (FiltersAction.Vacation === this.actionType() &&
+			'' !== this.actionValueFourth() && -1 === this.actionValueFourth().indexOf('@')
+		)
+		{
+			this.actionValueFourth.error(true);
 			return false;
 		}
 
@@ -193,112 +184,109 @@
 		this.actionValue.error(false);
 
 		return true;
-	};
+	}
 
-	FilterModel.prototype.toJson = function ()
-	{
+	toJson() {
 		return {
-			'ID': this.id,
-			'Enabled': this.enabled() ? '1' : '0',
-			'Name': this.name(),
-			'ConditionsType': this.conditionsType(),
-			'Conditions': _.map(this.conditions(), function (oItem) {
-				return oItem.toJson();
-			}),
+			ID: this.id,
+			Enabled: this.enabled() ? '1' : '0',
+			Name: this.name(),
+			ConditionsType: this.conditionsType(),
+			Conditions: _.map(this.conditions(), (item) => item.toJson()),
 
-			'ActionValue': this.actionValue(),
-			'ActionValueSecond': this.actionValueSecond(),
-			'ActionValueThird': this.actionValueThird(),
-			'ActionType': this.actionType(),
+			ActionValue: this.actionValue(),
+			ActionValueSecond: this.actionValueSecond(),
+			ActionValueThird: this.actionValueThird(),
+			ActionValueFourth: this.actionValueFourth(),
+			ActionType: this.actionType(),
 
-			'Stop': this.actionNoStop() ? '0' : '1',
-			'Keep': this.actionKeep() ? '1' : '0',
-			'MarkAsRead': this.actionMarkAsRead() ? '1' : '0'
+			Stop: this.actionNoStop() ? '0' : '1',
+			Keep: this.actionKeep() ? '1' : '0',
+			MarkAsRead: this.actionMarkAsRead() ? '1' : '0'
 		};
-	};
+	}
 
-	FilterModel.prototype.addCondition = function ()
-	{
+	addCondition() {
 		this.conditions.push(new FilterConditionModel());
-	};
+	}
 
-	FilterModel.prototype.removeCondition = function (oConditionToDelete)
-	{
+	removeCondition(oConditionToDelete) {
 		this.conditions.remove(oConditionToDelete);
-		Utils.delegateRunOnDestroy(oConditionToDelete);
-	};
+		delegateRunOnDestroy(oConditionToDelete);
+	}
 
-	FilterModel.prototype.parse = function (oItem)
-	{
-		var bResult = false;
-		if (oItem && 'Object/Filter' === oItem['@Object'])
+	setRecipients() {
+		this.actionValueFourth(AccountStore.accountsEmails().join(', '));
+	}
+
+	parse(json) {
+		let result = false;
+		if (json && 'Object/Filter' === json['@Object'])
 		{
-			this.id = Utils.pString(oItem['ID']);
-			this.name(Utils.pString(oItem['Name']));
-			this.enabled(!!oItem['Enabled']);
+			this.id = pString(json.ID);
+			this.name(pString(json.Name));
+			this.enabled(!!json.Enabled);
 
-			this.conditionsType(Utils.pString(oItem['ConditionsType']));
+			this.conditionsType(pString(json.ConditionsType));
 
 			this.conditions([]);
 
-			if (Utils.isNonEmptyArray(oItem['Conditions']))
+			if (isNonEmptyArray(json.Conditions))
 			{
-				this.conditions(_.compact(_.map(oItem['Conditions'], function (aData) {
-					var oFilterCondition = new FilterConditionModel();
-					return oFilterCondition && oFilterCondition.parse(aData) ?
-						oFilterCondition : null;
+				this.conditions(_.compact(_.map(json.Conditions, (aData) => {
+					const filterCondition = new FilterConditionModel();
+					return filterCondition && filterCondition.parse(aData) ? filterCondition : null;
 				})));
 			}
 
-			this.actionType(Utils.pString(oItem['ActionType']));
+			this.actionType(pString(json.ActionType));
 
-			this.actionValue(Utils.pString(oItem['ActionValue']));
-			this.actionValueSecond(Utils.pString(oItem['ActionValueSecond']));
-			this.actionValueThird(Utils.pString(oItem['ActionValueThird']));
+			this.actionValue(pString(json.ActionValue));
+			this.actionValueSecond(pString(json.ActionValueSecond));
+			this.actionValueThird(pString(json.ActionValueThird));
+			this.actionValueFourth(pString(json.ActionValueFourth));
 
-			this.actionNoStop(!oItem['Stop']);
-			this.actionKeep(!!oItem['Keep']);
-			this.actionMarkAsRead(!!oItem['MarkAsRead']);
+			this.actionNoStop(!json.Stop);
+			this.actionKeep(!!json.Keep);
+			this.actionMarkAsRead(!!json.MarkAsRead);
 
-			bResult = true;
+			result = true;
 		}
 
-		return bResult;
-	};
+		return result;
+	}
 
-	FilterModel.prototype.cloneSelf = function ()
-	{
-		var oClone = new FilterModel();
+	cloneSelf() {
 
-		oClone.id = this.id;
+		const filter = new FilterModel();
 
-		oClone.enabled(this.enabled());
+		filter.id = this.id;
 
-		oClone.name(this.name());
-		oClone.name.error(this.name.error());
+		filter.enabled(this.enabled());
 
-		oClone.conditionsType(this.conditionsType());
+		filter.name(this.name());
+		filter.name.error(this.name.error());
 
-		oClone.actionMarkAsRead(this.actionMarkAsRead());
+		filter.conditionsType(this.conditionsType());
 
-		oClone.actionType(this.actionType());
+		filter.actionMarkAsRead(this.actionMarkAsRead());
 
-		oClone.actionValue(this.actionValue());
-		oClone.actionValue.error(this.actionValue.error());
+		filter.actionType(this.actionType());
 
-		oClone.actionValueSecond(this.actionValueSecond());
-		oClone.actionValueThird(this.actionValueThird());
+		filter.actionValue(this.actionValue());
+		filter.actionValue.error(this.actionValue.error());
 
-		oClone.actionKeep(this.actionKeep());
-		oClone.actionNoStop(this.actionNoStop());
+		filter.actionValueSecond(this.actionValueSecond());
+		filter.actionValueThird(this.actionValueThird());
+		filter.actionValueFourth(this.actionValueFourth());
 
-		oClone.conditions(_.map(this.conditions(), function (oCondition) {
-			return oCondition.cloneSelf();
-		}));
+		filter.actionKeep(this.actionKeep());
+		filter.actionNoStop(this.actionNoStop());
 
-		return oClone;
-	};
+		filter.conditions(_.map(this.conditions(), (item) => item.cloneSelf()));
 
-	module.exports = FilterModel;
+		return filter;
+	}
+}
 
-}());
+export {FilterModel, FilterModel as default};

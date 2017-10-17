@@ -18,6 +18,21 @@ class ChangePasswordPostfixAdminDriver implements \RainLoop\Providers\ChangePass
 	private $sDatabase = 'postfixadmin';
 
 	/**
+	* @var string
+	*/
+	private $sTable = 'mailbox';
+
+	/**
+	* @var string
+	*/
+	private $sUsercol = 'username';
+
+	/**
+	* @var string
+	*/
+	private $sPasscol = 'password';
+
+	/**
 	 * @var string
 	 */
 	private $sUser = 'postfixadmin';
@@ -72,6 +87,39 @@ class ChangePasswordPostfixAdminDriver implements \RainLoop\Providers\ChangePass
 	public function SetDatabase($sDatabase)
 	{
 		$this->sDatabase = $sDatabase;
+		return $this;
+	}
+
+	/**
+	* @param string $sTable
+	*
+	* @return \ChangePasswordPostfixAdminDriver
+	*/
+	public function SetTable($sTable)
+	{
+		$this->sTable = $sTable;
+		return $this;
+	}
+
+	/**
+	* @param string $sUsercol
+	*
+	* @return \ChangePasswordPostfixAdminDriver
+	*/
+	public function SetUserColumn($sUsercol)
+	{
+		$this->sUsercol = $sUsercol;
+		return $this;
+	}
+
+	/**
+	* @param string $sPasscol
+	*
+	* @return \ChangePasswordPostfixAdminDriver
+	*/
+	public function SetPasswordColumn($sPasscol)
+	{
+		$this->sPasscol = $sPasscol;
 		return $this;
 	}
 
@@ -159,6 +207,8 @@ class ChangePasswordPostfixAdminDriver implements \RainLoop\Providers\ChangePass
 			$this->oLogger->Write('Postfix: Try to change password for '.$oAccount->Email());
 		}
 
+		unset($sPrevPassword);
+
 		$bResult = false;
 
 		if (0 < \strlen($sNewPassword))
@@ -173,14 +223,14 @@ class ChangePasswordPostfixAdminDriver implements \RainLoop\Providers\ChangePass
 				$sUpdatePassword = $this->cryptPassword($sNewPassword, $oPdo);
 				if (0 < \strlen($sUpdatePassword))
 				{
-					$oStmt = $oPdo->prepare('UPDATE mailbox SET password = ? WHERE username = ?');
+					$oStmt = $oPdo->prepare("UPDATE {$this->sTable} SET {$this->sPasscol} = ? WHERE {$this->sUsercol} = ?");
 					$bResult = (bool) $oStmt->execute(array($sUpdatePassword, $oAccount->Email()));
 				}
 				else
 				{
 					if ($this->oLogger)
 					{
-						$this->oLogger->Write('Postfix: Encyted password is ematy',
+						$this->oLogger->Write('Postfix: Encrypted password is empty',
 							\MailSo\Log\Enumerations\Type::ERROR);
 					}
 				}
@@ -208,24 +258,34 @@ class ChangePasswordPostfixAdminDriver implements \RainLoop\Providers\ChangePass
 	private function cryptPassword($sPassword, $oPdo)
 	{
 		$sResult = '';
-		switch ($this->sEncrypt)
+		$sSalt = substr(str_shuffle('./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'), 0, 16);
+		switch (strtolower($this->sEncrypt))
 		{
 			default:
+			case 'plain':
 			case 'cleartext':
-				$sResult = $sPassword;
+				$sResult = '{PLAIN}' . $sPassword;
 				break;
 
 			case 'md5crypt':
 				include_once __DIR__.'/md5crypt.php';
-				$sResult = md5crypt($sPassword);
+				$sResult = '{MD5-CRYPT}' . md5crypt($sPassword);
 				break;
 
 			case 'md5':
-				$sResult = md5($sPassword);
+				$sResult = '{PLAIN-MD5}' . md5($sPassword);
 				break;
 
 			case 'system':
-				$sResult = crypt($sPassword);
+				$sResult = '{CRYPT}' . crypt($sPassword);
+				break;
+
+			case 'sha256-crypt':
+				$sResult = '{SHA256-CRYPT}' . crypt($sPassword,'$5$'.$sSalt);
+				break;
+
+			case 'sha512-crypt':
+				$sResult = '{SHA512-CRYPT}' . crypt($sPassword,'$6$'.$sSalt);
 				break;
 
 			case 'mysql_encrypt':

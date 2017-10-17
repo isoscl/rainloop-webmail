@@ -5,21 +5,21 @@
 				<i class="icon-spinner animated" style="margin-top: 2px" data-bind="style: {'visibility': adminManLoadingVisibility }"></i>
 				&nbsp;&nbsp;
 				RainLoop
-				<span data-bind="visible: capa">(Premium)</span>
+				<span data-bind="visible: capa && !community">(<span data-i18n="TOP_PANEL/LABEL_PREMIUM"></span>)</span>
 				&mdash;
-				Admin Panel
+				<span data-i18n="TOP_PANEL/LABEL_ADMIN_PANEL"></span>
 				&nbsp;&nbsp;
-				(<span data-bind="text: adminDomain"></span>)
+				<span data-bind="visible: !community">(<span data-bind="text: adminDomain"></span>)</span>
 			</h4>
 			<div class="btn-group pull-right">
-				<a class="btn btn-narrow" data-bind="click: logoutClick">
+				<a class="btn single btn-narrow" data-bind="click: logoutClick">
 					<i class="icon-power"></i>
 				</a>
 			</div>
 		</div>
 	</div>
-	<div class="b-content" data-bind="nano: true">
-		<div class="content g-scrollbox">
+	<div class="b-content" data-bind="nano: true, scrollerShadows: true">
+		<div class="content g-scrollbox" data-scroller-shadows-content>
 			<div class="content-wrapper">
 				<div id="rl-settings-subscreen" class="b-settings-content" style="position: relative; z-index: 2"></div>
 			</div>

@@ -1,66 +1,49 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
+import {componentExportHelper} from 'Component/Abstract';
+import {AbstracCheckbox} from 'Component/AbstracCheckbox';
 
-	'use strict';
-
-	var
-		_ = require('_'),
-		ko = require('ko'),
-
-		AbstracCheckbox = require('Component/AbstracCheckbox')
-	;
-
+class CheckboxMaterialDesignComponent extends AbstracCheckbox
+{
 	/**
-	 * @constructor
-	 *
-	 * @param {Object} oParams
-	 *
-	 * @extends AbstracCheckbox
+	 * @param {Object} params
 	 */
-	function CheckboxMaterialDesignComponent(oParams)
-	{
-		AbstracCheckbox.call(this, oParams);
+	constructor(params) {
 
-		this.animationBox = ko.observable(false).extend({'falseTimeout': 200});
-		this.animationCheckmark = ko.observable(false).extend({'falseTimeout': 200});
+		super(params);
+
+		this.animationBox = ko.observable(false).extend({falseTimeout: 200});
+		this.animationCheckmark = ko.observable(false).extend({falseTimeout: 200});
 
 		this.animationBoxSetTrue = _.bind(this.animationBoxSetTrue, this);
 		this.animationCheckmarkSetTrue = _.bind(this.animationCheckmarkSetTrue, this);
 
 		this.disposable.push(
-			this.value.subscribe(function (bValue) {
-				this.triggerAnimation(bValue);
+			this.value.subscribe((value) => {
+				this.triggerAnimation(value);
 			}, this)
 		);
 	}
 
-	_.extend(CheckboxMaterialDesignComponent.prototype, AbstracCheckbox.prototype);
-
-	CheckboxMaterialDesignComponent.prototype.animationBoxSetTrue = function()
-	{
+	animationBoxSetTrue() {
 		this.animationBox(true);
-	};
+	}
 
-	CheckboxMaterialDesignComponent.prototype.animationCheckmarkSetTrue = function()
-	{
+	animationCheckmarkSetTrue() {
 		this.animationCheckmark(true);
-	};
+	}
 
-	CheckboxMaterialDesignComponent.prototype.triggerAnimation = function(bBox)
-	{
-		if (bBox)
-		{
+	triggerAnimation(box) {
+		if (box) {
 			this.animationBoxSetTrue();
 			_.delay(this.animationCheckmarkSetTrue, 200);
 		}
-		else
-		{
+		else {
 			this.animationCheckmarkSetTrue();
 			_.delay(this.animationBoxSetTrue, 200);
 		}
-	};
+	}
+}
 
-	module.exports = AbstracCheckbox.componentExportHelper(
-		CheckboxMaterialDesignComponent, 'CheckboxMaterialDesignComponent');
-
-}());
+export default componentExportHelper(CheckboxMaterialDesignComponent, 'CheckboxMaterialDesignComponent');

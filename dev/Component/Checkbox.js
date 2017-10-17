@@ -1,29 +1,7 @@
 
-(function () {
+import {componentExportHelper} from 'Component/Abstract';
+import {AbstracCheckbox} from 'Component/AbstracCheckbox';
 
-	'use strict';
+class CheckboxComponent extends AbstracCheckbox {}
 
-	var
-		_ = require('_'),
-
-		AbstracCheckbox = require('Component/AbstracCheckbox')
-	;
-
-	/**
-	 * @constructor
-	 *
-	 * @param {Object} oParams
-	 *
-	 * @extends AbstracCheckbox
-	 */
-	function CheckboxComponent(oParams)
-	{
-		AbstracCheckbox.call(this, oParams);
-	}
-
-	_.extend(CheckboxComponent.prototype, AbstracCheckbox.prototype);
-
-	module.exports = AbstracCheckbox.componentExportHelper(
-		CheckboxComponent, 'CheckboxComponent');
-
-}());
+export default componentExportHelper(CheckboxComponent, 'CheckboxComponent');

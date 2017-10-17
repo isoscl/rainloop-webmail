@@ -1,52 +1,41 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {ContactPropertyType} from 'Common/Enums';
+import {pInt, pString} from 'Common/Utils';
+import {i18n} from 'Common/Translator';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
-
-		AbstractModel = require('Knoin/AbstractModel')
-	;
-
+class ContactPropertyModel extends AbstractModel
+{
 	/**
-	 * @constructor
-	 * @param {number=} iType = Enums.ContactPropertyType.Unknown
-	 * @param {string=} sTypeStr = ''
-	 * @param {string=} sValue = ''
-	 * @param {boolean=} bFocused = false
-	 * @param {string=} sPlaceholder = ''
+	 * @param {number=} type = Enums.ContactPropertyType.Unknown
+	 * @param {string=} typeStr = ''
+	 * @param {string=} value = ''
+	 * @param {boolean=} focused = false
+	 * @param {string=} placeholder = ''
 	 */
-	function ContactPropertyModel(iType, sTypeStr, sValue, bFocused, sPlaceholder)
+	constructor(type = ContactPropertyType.Unknown, typeStr = '', value = '', focused = false, placeholder = '')
 	{
-		AbstractModel.call(this, 'ContactPropertyModel');
+		super('ContactPropertyModel');
 
-		this.type = ko.observable(Utils.isUnd(iType) ? Enums.ContactPropertyType.Unknown : iType);
-		this.typeStr = ko.observable(Utils.isUnd(sTypeStr) ? '' : sTypeStr);
-		this.focused = ko.observable(Utils.isUnd(bFocused) ? false : !!bFocused);
-		this.value = ko.observable(Utils.pString(sValue));
+		this.type = ko.observable(pInt(type));
+		this.typeStr = ko.observable(pString(typeStr));
+		this.focused = ko.observable(!!focused);
+		this.value = ko.observable(pString(value));
 
-		this.placeholder = ko.observable(sPlaceholder || '');
+		this.placeholder = ko.observable(placeholder);
 
-		this.placeholderValue = ko.computed(function () {
-			var sPlaceholder = this.placeholder();
-			return sPlaceholder ? Translator.i18n(sPlaceholder) : '';
-		}, this);
+		this.placeholderValue = ko.computed(() => {
+			const v = this.placeholder();
+			return v ? i18n(v) : '';
+		});
 
-		this.largeValue = ko.computed(function () {
-			return Enums.ContactPropertyType.Note === this.type();
-		}, this);
+		this.largeValue = ko.computed(() => ContactPropertyType.Note === this.type());
 
 		this.regDisposables([this.placeholderValue, this.largeValue]);
 	}
+}
 
-	_.extend(ContactPropertyModel.prototype, AbstractModel.prototype);
-
-	module.exports = ContactPropertyModel;
-
-}());
+export {ContactPropertyModel, ContactPropertyModel as default};

@@ -1,31 +1,26 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {FiltersAction, FilterConditionField, FilterConditionType} from 'Common/Enums';
+import {bMobileDevice} from 'Common/Globals';
+import {defautOptionsAfterRender, delegateRun} from 'Common/Utils';
+import {i18n, initOnStartOrLangChange} from 'Common/Translator';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import FilterStore from 'Stores/User/Filter';
+import FolderStore from 'Stores/User/Folder';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import {popup, command} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Data = require('Storage/User/Data'),
-
-		FilterStore = require('Stores/User/Filter'),
-
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function FilterPopupView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsFilter');
+@popup({
+	name: 'View/Popup/Filter',
+	templateID: 'PopupsFilter'
+})
+class FilterPopupView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
 		this.isNew = ko.observable(true);
 
@@ -36,136 +31,140 @@
 
 		this.allowMarkAsRead = ko.observable(false);
 
-		this.defautOptionsAfterRender = Utils.defautOptionsAfterRender;
-		this.folderSelectList = Data.folderMenuForFilters;
+		this.defautOptionsAfterRender = defautOptionsAfterRender;
+		this.folderSelectList = FolderStore.folderMenuForFilters;
 		this.selectedFolderValue = ko.observable('');
 
-		this.selectedFolderValue.subscribe(function() {
+		this.selectedFolderValue.subscribe(() => {
 			if (this.filter())
 			{
 				this.filter().actionValue.error(false);
 			}
-		}, this);
-
-		this.saveFilter = Utils.createCommand(this, function () {
-
-			if (this.filter())
-			{
-				if (Enums.FiltersAction.MoveTo === this.filter().actionType())
-				{
-					this.filter().actionValue(this.selectedFolderValue());
-				}
-
-				if (!this.filter().verify())
-				{
-					return false;
-				}
-
-				if (this.fTrueCallback)
-				{
-					this.fTrueCallback(this.filter());
-				}
-
-				if (this.modalVisibility())
-				{
-					Utils.delegateRun(this, 'closeCommand');
-				}
-			}
-
-			return true;
 		});
 
 		this.actionTypeOptions = ko.observableArray([]);
 		this.fieldOptions = ko.observableArray([]);
 		this.typeOptions = ko.observableArray([]);
+		this.typeOptionsSize = ko.observableArray([]);
 
-		Translator.initOnStartOrLangChange(this.populateOptions, this);
+		initOnStartOrLangChange(_.bind(this.populateOptions, this));
 
 		this.modules.subscribe(this.populateOptions, this);
-
-		kn.constructorEnd(this);
 	}
 
-	kn.extendAsViewModel(['View/Popup/Filter', 'PopupsFilterViewModel'], FilterPopupView);
-	_.extend(FilterPopupView.prototype, AbstractView.prototype);
+	@command()
+	saveFilterCommand() {
 
-	FilterPopupView.prototype.populateOptions = function ()
-	{
+		if (this.filter())
+		{
+			if (FiltersAction.MoveTo === this.filter().actionType())
+			{
+				this.filter().actionValue(this.selectedFolderValue());
+			}
+
+			if (!this.filter().verify())
+			{
+				return false;
+			}
+
+			if (this.fTrueCallback)
+			{
+				this.fTrueCallback(this.filter());
+			}
+
+			if (this.modalVisibility())
+			{
+				delegateRun(this, 'closeCommand');
+			}
+		}
+
+		return true;
+	}
+
+	populateOptions() {
 		this.actionTypeOptions([]);
 
-//		this.actionTypeOptions.push({'id': Enums.FiltersAction.None,
-//			'name': Translator.i18n('POPUPS_FILTER/SELECT_ACTION_NONE')});
+		// this.actionTypeOptions.push({'id': FiltersAction.None,
+		// 'name': i18n('POPUPS_FILTER/SELECT_ACTION_NONE')});
 
-		var oModules = this.modules();
-		if (oModules)
+		const modules = this.modules();
+		if (modules)
 		{
-			if (oModules.markasread)
+			if (modules.markasread)
 			{
 				this.allowMarkAsRead(true);
 			}
 
-			if (oModules.moveto)
+			if (modules.moveto)
 			{
-				this.actionTypeOptions.push({'id': Enums.FiltersAction.MoveTo,
-					'name': Translator.i18n('POPUPS_FILTER/SELECT_ACTION_MOVE_TO')});
+				this.actionTypeOptions.push({'id': FiltersAction.MoveTo,
+					'name': i18n('POPUPS_FILTER/SELECT_ACTION_MOVE_TO')});
 			}
 
-			if (oModules.redirect)
+			if (modules.redirect)
 			{
-				this.actionTypeOptions.push({'id': Enums.FiltersAction.Forward,
-					'name': Translator.i18n('POPUPS_FILTER/SELECT_ACTION_FORWARD_TO')});
+				this.actionTypeOptions.push({'id': FiltersAction.Forward,
+					'name': i18n('POPUPS_FILTER/SELECT_ACTION_FORWARD_TO')});
 			}
 
-			if (oModules.reject)
+			if (modules.reject)
 			{
-				this.actionTypeOptions.push({'id': Enums.FiltersAction.Reject,
-					'name': Translator.i18n('POPUPS_FILTER/SELECT_ACTION_REJECT')});
+				this.actionTypeOptions.push({'id': FiltersAction.Reject,
+					'name': i18n('POPUPS_FILTER/SELECT_ACTION_REJECT')});
 			}
 
-			if (oModules.vacation)
+			if (modules.vacation)
 			{
-				this.actionTypeOptions.push({'id': Enums.FiltersAction.Vacation,
-					'name': Translator.i18n('POPUPS_FILTER/SELECT_ACTION_VACATION_MESSAGE')});
+				this.actionTypeOptions.push({'id': FiltersAction.Vacation,
+					'name': i18n('POPUPS_FILTER/SELECT_ACTION_VACATION_MESSAGE')});
 
 			}
 		}
 
-		this.actionTypeOptions.push({'id': Enums.FiltersAction.Discard,
-			'name': Translator.i18n('POPUPS_FILTER/SELECT_ACTION_DISCARD')});
+		this.actionTypeOptions.push({'id': FiltersAction.Discard,
+			'name': i18n('POPUPS_FILTER/SELECT_ACTION_DISCARD')});
 
 		this.fieldOptions([
-			{'id': Enums.FilterConditionField.From, 'name': Translator.i18n('POPUPS_FILTER/SELECT_FIELD_FROM')},
-			{'id': Enums.FilterConditionField.Recipient, 'name': Translator.i18n('POPUPS_FILTER/SELECT_FIELD_RECIPIENTS')},
-			{'id': Enums.FilterConditionField.Subject, 'name': Translator.i18n('POPUPS_FILTER/SELECT_FIELD_SUBJECT')}
+			{'id': FilterConditionField.From, 'name': i18n('POPUPS_FILTER/SELECT_FIELD_FROM')},
+			{'id': FilterConditionField.Recipient, 'name': i18n('POPUPS_FILTER/SELECT_FIELD_RECIPIENTS')},
+			{'id': FilterConditionField.Subject, 'name': i18n('POPUPS_FILTER/SELECT_FIELD_SUBJECT')},
+			{'id': FilterConditionField.Size, 'name': i18n('POPUPS_FILTER/SELECT_FIELD_SIZE')},
+			{'id': FilterConditionField.Header, 'name': i18n('POPUPS_FILTER/SELECT_FIELD_HEADER')}
 		]);
 
 		this.typeOptions([
-			{'id': Enums.FilterConditionType.Contains, 'name': Translator.i18n('POPUPS_FILTER/SELECT_TYPE_CONTAINS')},
-			{'id': Enums.FilterConditionType.NotContains, 'name': Translator.i18n('POPUPS_FILTER/SELECT_TYPE_NOT_CONTAINS')},
-			{'id': Enums.FilterConditionType.EqualTo, 'name': Translator.i18n('POPUPS_FILTER/SELECT_TYPE_EQUAL_TO')},
-			{'id': Enums.FilterConditionType.NotEqualTo, 'name': Translator.i18n('POPUPS_FILTER/SELECT_TYPE_NOT_EQUAL_TO')}
+			{'id': FilterConditionType.Contains, 'name': i18n('POPUPS_FILTER/SELECT_TYPE_CONTAINS')},
+			{'id': FilterConditionType.NotContains, 'name': i18n('POPUPS_FILTER/SELECT_TYPE_NOT_CONTAINS')},
+			{'id': FilterConditionType.EqualTo, 'name': i18n('POPUPS_FILTER/SELECT_TYPE_EQUAL_TO')},
+			{'id': FilterConditionType.NotEqualTo, 'name': i18n('POPUPS_FILTER/SELECT_TYPE_NOT_EQUAL_TO')}
 		]);
-	};
 
+		if (modules && modules.regex)
+		{
+			this.typeOptions.push({'id': FilterConditionType.Regex, 'name': 'Regex'});
+		}
 
-	FilterPopupView.prototype.removeCondition = function (oConditionToDelete)
-	{
+		this.typeOptionsSize([
+			{'id': FilterConditionType.Over, 'name': i18n('POPUPS_FILTER/SELECT_TYPE_OVER')},
+			{'id': FilterConditionType.Under, 'name': i18n('POPUPS_FILTER/SELECT_TYPE_UNDER')}
+		]);
+	}
+
+	removeCondition(oConditionToDelete) {
 		if (this.filter())
 		{
 			this.filter().removeCondition(oConditionToDelete);
 		}
-	};
+	}
 
-	FilterPopupView.prototype.clearPopup = function ()
-	{
+	clearPopup() {
 		this.isNew(true);
 
 		this.fTrueCallback = null;
 		this.filter(null);
-	};
+	}
 
-	FilterPopupView.prototype.onShow = function (oFilter, fTrueCallback, bEdit)
-	{
+	onShow(oFilter, fTrueCallback, bEdit) {
 		this.clearPopup();
 
 		this.fTrueCallback = fTrueCallback;
@@ -182,16 +181,14 @@
 		{
 			oFilter.name.focused(true);
 		}
-	};
+	}
 
-	FilterPopupView.prototype.onFocus = function ()
-	{
-		if (this.isNew() &&  this.filter())
+	onShowWithDelay() {
+		if (this.isNew() && this.filter() && !bMobileDevice)
 		{
 			this.filter().name.focused(true);
 		}
-	};
+	}
+}
 
-	module.exports = FilterPopupView;
-
-}());
+export {FilterPopupView, FilterPopupView as default};

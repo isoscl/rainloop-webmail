@@ -32,6 +32,7 @@ class Api
 			if ($bOne)
 			{
 				\RainLoop\Api::SetupDefaultMailSoConfig();
+
 				$bOne = \RainLoop\Api::RunResult();
 			}
 		}
@@ -91,13 +92,30 @@ class Api
 			\MailSo\Config::$MessageListDateFilter =
 				(int) \RainLoop\Api::Config()->Get('labs', 'imap_message_list_date_filter', 0);
 
+			\MailSo\Config::$MessageListPermanentFilter =
+				\trim(\RainLoop\Api::Config()->Get('labs', 'imap_message_list_permanent_filter', ''));
+
+			\MailSo\Config::$MessageAllHeaders =
+				!!\RainLoop\Api::Config()->Get('labs', 'imap_message_all_headers', false);
+
 			\MailSo\Config::$LargeThreadLimit =
-				(int) \RainLoop\Api::Config()->Get('labs', 'imap_large_thread_limit', 100);
+				(int) \RainLoop\Api::Config()->Get('labs', 'imap_large_thread_limit', 50);
+
+			\MailSo\Config::$ImapTimeout =
+				(int) \RainLoop\Api::Config()->Get('labs', 'imap_timeout', 300);
+
+			\MailSo\Config::$BoundaryPrefix = '_RainLoop_';
 
 			\MailSo\Config::$SystemLogger = \RainLoop\Api::Logger();
 
 			$sSslCafile = \RainLoop\Api::Config()->Get('ssl', 'cafile', '');
 			$sSslCapath = \RainLoop\Api::Config()->Get('ssl', 'capath', '');
+
+			\RainLoop\Utils::$CookieDefaultPath = \RainLoop\Api::Config()->Get('labs', 'cookie_default_path', '');
+			if (\RainLoop\Api::Config()->Get('labs', 'cookie_default_secure', false))
+			{
+				\RainLoop\Utils::$CookieDefaultSecure = true;
+			}
 
 			if (!empty($sSslCafile) || !empty($sSslCapath))
 			{
@@ -116,6 +134,54 @@ class Api
 					}
 				});
 			}
+
+			\MailSo\Config::$HtmlStrictDebug = !!\RainLoop\Api::Config()->Get('debug', 'enable', false);
+
+			\MailSo\Config::$CheckNewMessages = !!\RainLoop\Api::Config()->Get('labs', 'check_new_messages', true);
+
+			if (\RainLoop\Api::Config()->Get('labs', 'strict_html_parser', true))
+			{
+				\MailSo\Config::$HtmlStrictAllowedAttributes = array(
+					// rainloop
+					'data-wrp',
+					// defaults
+					'name',
+					'dir', 'lang', 'style', 'title',
+					'background', 'bgcolor', 'alt', 'height', 'width', 'src', 'href',
+					'border', 'bordercolor', 'charset', 'direction', 'language',
+					// a
+					'coords', 'download', 'hreflang', 'shape',
+					// body
+					'alink', 'bgproperties', 'bottommargin', 'leftmargin', 'link', 'rightmargin', 'text', 'topmargin', 'vlink',
+					'marginwidth', 'marginheight', 'offset',
+					// button,
+					'disabled', 'type', 'value',
+					// col
+					'align', 'valign',
+					// font
+					'color', 'face', 'size',
+					// form
+					'novalidate',
+					// hr
+					'noshade',
+					// img
+					'hspace', 'sizes', 'srcset', 'vspace', 'usemap',
+					// input, textarea
+					'checked', 'max', 'min', 'maxlength', 'multiple', 'pattern', 'placeholder', 'readonly', 'required', 'step', 'wrap',
+					// label
+					'for',
+					// meter
+					'low', 'high', 'optimum',
+					// ol
+					'reversed', 'start',
+					// option
+					'selected', 'label',
+					// table
+					'cols', 'rows', 'frame', 'rules', 'summary', 'cellpadding', 'cellspacing',
+					// td
+					'abbr', 'axis', 'colspan', 'rowspan', 'headers', 'nowrap'
+				);
+			}
 		}
 	}
 
@@ -130,19 +196,22 @@ class Api
 	/**
 	 * @param string $sEmail
 	 * @param string $sPassword
+	 * @param array $aAdditionalOptions = array()
 	 * @param bool $bUseTimeout = true
 	 *
 	 * @return string
 	 */
-	public static function GetUserSsoHash($sEmail, $sPassword, $bUseTimeout = true)
+	public static function GetUserSsoHash($sEmail, $sPassword, $aAdditionalOptions = array(), $bUseTimeout = true)
 	{
-		$sSsoHash = \MailSo\Base\Utils::Sha1Rand($sEmail.$sPassword);
+		$sSsoHash = \MailSo\Base\Utils::Sha1Rand(\md5($sEmail).\md5($sPassword));
 
-		return \RainLoop\Api::Actions()->Cacher()->Set(\RainLoop\KeyPathHelper::SsoCacherKey($sSsoHash), \RainLoop\Utils::EncodeKeyValues(array(
-			'Email' => $sEmail,
-			'Password' => $sPassword,
-			'Time' => $bUseTimeout ? \time() : 0
-		))) ? $sSsoHash : '';
+		return \RainLoop\Api::Actions()->Cacher()->Set(\RainLoop\KeyPathHelper::SsoCacherKey($sSsoHash),
+			\RainLoop\Utils::EncodeKeyValuesQ(array(
+				'Email' => $sEmail,
+				'Password' => $sPassword,
+				'AdditionalOptions' => $aAdditionalOptions,
+				'Time' => $bUseTimeout ? \time() : 0
+			))) ? $sSsoHash : '';
 	}
 
 	/**

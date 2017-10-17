@@ -1,5 +1,5 @@
-html.rl-no-preview-pane {
 
+html.rl-no-preview-pane {
 	.messageList.message-selected {
 		display: none;
 	}
@@ -15,6 +15,7 @@ html.rl-no-preview-pane {
 		height: 30px;
 		padding: 10px @rlMainBorderSize;
 		z-index: 102;
+		white-space: nowrap;
 	}
 
 	.b-footer {
@@ -75,6 +76,7 @@ html.rl-no-preview-pane {
 		height: 29px;
 		padding: 10px 8px 10px 11px;
 		z-index: 101;
+		white-space: nowrap;
 
 		background-color: #eee;
 //		#gradient > .vertical(#f4f4f4, #dfdfdf);
@@ -173,9 +175,25 @@ html.rl-no-preview-pane {
 		}
 
 		.listSearchDesc {
-			font-size: 20px;
-			padding: 20px;
+			font-size: 18px;
+			padding: 15px;
 			border-bottom: 1px solid #eee;
+
+			html.rl-mobile &{
+				font-size: 16px;
+				padding: 12px;
+			}
+		}
+
+		.listThreadUidDesc {
+			font-size: 16px;
+			padding: 7px 20px 6px 20px;
+			background-color: #aaa;
+			border-bottom: 1px solid #888;
+			color: #fff;
+			cursor: pointer;
+			text-shadow: 0 1px 0 #000;
+			text-align: center;
 		}
 
 		.delimiter {
@@ -236,6 +254,10 @@ html.rl-no-preview-pane {
 				background-color: #eee;
 				float: left;
 				height: 100%;
+			}
+
+			&.focused {
+				background-color: #f5f5f5;
 			}
 
 			&.focused .sidebarParent {
@@ -313,6 +335,12 @@ html.rl-no-preview-pane {
 			&.e-single-line .dateParent {
 			}
 
+			.threadsParent {
+				display: inline-block;
+				float: right;
+				position: relative;
+			}
+
 			.attachmentParent {
 				display: inline-block;
 				float: right;
@@ -322,7 +350,7 @@ html.rl-no-preview-pane {
 
 			&.e-single-line .attachmentParent {
 				float: left;
-				margin: 0 5px 0 0;
+				margin: 0 8px 0 0;
 			}
 
 			.senderParent {
@@ -393,6 +421,30 @@ html.rl-no-preview-pane {
 				text-overflow: ellipsis;
 			}
 
+			.threads-len {
+				.threads-len-data {
+
+					background-color: #eee;
+					color: #666;
+					border-radius: 6px;
+					padding: 2px 0px 1px 6px;
+					margin-right: 2px;
+					border: 1px solid #ccc;
+
+					[class^="icon-"],
+					[class*=" icon-"] {
+						font-size: 14px;
+					}
+
+					&:hover {
+						background-color: #aaa;
+						border-color: #666;
+						text-shadow: 0 1px 0 #999;
+						color: #fff;
+					}
+				}
+			}
+
 			.subject-prefix {
 				color: #888;
 				/*font-style: italic;*/
@@ -437,6 +489,16 @@ html.rl-no-preview-pane {
 				text-shadow: 0px 1px 0px #eee;
 			}
 
+			&.hasUnseenSubMessage {
+				background-color: #FFFFD9;
+				.sidebarParent {
+					background-color: lighten(orange, 30%);
+				}
+				&.focused .sidebarParent {
+					background-color: darken(orange, 10%) !important;
+				}
+			}
+
 			&.unseen {
 				background-color: #FFFFD9;
 				.sender, .subject, .subject-suffix {
@@ -451,16 +513,7 @@ html.rl-no-preview-pane {
 				}
 			}
 
-			&.hasUnseenSubMessage {
-				background-color: #FFFFD9;
-				.sidebarParent {
-					background-color: lighten(orange, 30%);
-				}
-				&.focused .sidebarParent {
-					background-color: darken(orange, 10%) !important;
-				}
-			}
-
+/*
 			&.hasParentMessage {
 				background-color: #ecf0f1;
 
@@ -484,6 +537,7 @@ html.rl-no-preview-pane {
 					}
 				}
 			}
+*/
 
 			&.checked {
 				.sidebarParent {
@@ -562,12 +616,12 @@ html.ssm-state-desktop-large {
 	}
 }
 
-html.cssanimations.rl-anim .messageList .line-loading {
+html.cssanimations .messageList .line-loading {
 	height: 5px !important;
 }
 
 .draggablePlace {
-	z-index: 10002;
+	z-index: 10003;
 	color: #fff;
 	background-color: #333;
 	background-color: rgba(0,0,0,0.5);
@@ -576,4 +630,10 @@ html.cssanimations.rl-anim .messageList .line-loading {
 	height: 20px;
 	cursor: pointer;
 	cursor: move;
+}
+
+html.rl-mobile {
+	#rl-sub-left .messageList .inputSearch {
+		width: 160px !important;
+	}
 }

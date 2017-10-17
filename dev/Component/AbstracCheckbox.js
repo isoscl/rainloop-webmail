@@ -1,66 +1,51 @@
 
-(function () {
+import ko from 'ko';
+import {isUnd} from 'Common/Utils';
+import {AbstractComponent} from 'Component/Abstract';
 
-	'use strict';
-
-	var
-		_ = require('_'),
-		ko = require('ko'),
-
-		Utils = require('Common/Utils'),
-
-		AbstractComponent = require('Component/Abstract')
-	;
-
+class AbstracCheckbox extends AbstractComponent
+{
 	/**
-	 * @constructor
-	 *
-	 * @param {Object} oParams
-	 *
-	 * @extends AbstractComponent
+	 * @param {Object} params = {}
 	 */
-	function AbstracCheckbox(oParams)
-	{
-		AbstractComponent.call(this);
+	constructor(params = {}) {
 
-		this.value = oParams.value;
-		if (Utils.isUnd(this.value) || !this.value.subscribe)
+		super();
+
+		this.value = params.value;
+		if (isUnd(this.value) || !this.value.subscribe)
 		{
-			this.value = ko.observable(Utils.isUnd(this.value) ? false : !!this.value);
+			this.value = ko.observable(isUnd(this.value) ? false : !!this.value);
 		}
 
-		this.enable = oParams.enable;
-		if (Utils.isUnd(this.enable) || !this.enable.subscribe)
+		this.enable = params.enable;
+		if (isUnd(this.enable) || !this.enable.subscribe)
 		{
-			this.enable = ko.observable(Utils.isUnd(this.enable) ? true : !!this.enable);
+			this.enable = ko.observable(isUnd(this.enable) ? true : !!this.enable);
 		}
 
-		this.disable = oParams.disable;
-		if (Utils.isUnd(this.disable) || !this.disable.subscribe)
+		this.disable = params.disable;
+		if (isUnd(this.disable) || !this.disable.subscribe)
 		{
-			this.disable = ko.observable(Utils.isUnd(this.disable) ? false : !!this.disable);
+			this.disable = ko.observable(isUnd(this.disable) ? false : !!this.disable);
 		}
 
-		this.label = oParams.label || '';
-		this.inline = Utils.isUnd(oParams.inline) ? false : oParams.inline;
+		this.label = params.label || '';
+		this.inline = isUnd(params.inline) ? false : params.inline;
 
-		this.readOnly = Utils.isUnd(oParams.readOnly) ? false : !!oParams.readOnly;
-		this.inverted = Utils.isUnd(oParams.inverted) ? false : !!oParams.inverted;
+		this.readOnly = isUnd(params.readOnly) ? false : !!params.readOnly;
+		this.inverted = isUnd(params.inverted) ? false : !!params.inverted;
 
-		this.labeled = !Utils.isUnd(oParams.label);
+		this.labeled = !isUnd(params.label);
+		this.labelAnimated = !!params.labelAnimated;
 	}
 
-	_.extend(AbstracCheckbox.prototype, AbstractComponent.prototype);
-
-	AbstracCheckbox.prototype.click = function() {
+	click() {
 		if (!this.readOnly && this.enable() && !this.disable())
 		{
 			this.value(!this.value());
 		}
-	};
+	}
+}
 
-	AbstracCheckbox.componentExportHelper = AbstractComponent.componentExportHelper;
-
-	module.exports = AbstracCheckbox;
-
-}());
+export {AbstracCheckbox, AbstracCheckbox as default};

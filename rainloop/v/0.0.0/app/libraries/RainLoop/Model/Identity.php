@@ -47,8 +47,8 @@ class Identity
 	 */
 	protected function __construct($sId = '', $sEmail = '')
 	{
-		$this->sId = $sId;
-		$this->sEmail = $sEmail;
+		$this->sId = empty($sId) ? '' : $sId;
+		$this->sEmail = empty($sEmail) ? '' : $sEmail;
 		$this->sName = '';
 		$this->sReplyTo = '';
 		$this->sBcc = '';
@@ -75,11 +75,13 @@ class Identity
 	}
 
 	/**
+	 * @param bool $bFillOnEmpty = false
+	 *
 	 * @return string
 	 */
-	public function Id()
+	public function Id($bFillOnEmpty = false)
 	{
-		return $this->sId;
+		return $bFillOnEmpty ? ('' === $this->sId ? '---' : $this->sId) : $this->sId;
 	}
 
 	/**
@@ -150,9 +152,9 @@ class Identity
 	 */
 	public function FromJSON($aData, $bAjax = false)
 	{
-		if (isset($aData['Id'], $aData['Email']) && !empty($aData['Email']))
+		if (!empty($aData['Email']))
 		{
-			$this->sId = $aData['Id'];
+			$this->sId = !empty($aData['Id']) ? $aData['Id'] : '';
 			$this->sEmail = $bAjax ? \MailSo\Base\Utils::IdnToAscii($aData['Email'], true) : $aData['Email'];
 			$this->sName = isset($aData['Name']) ? $aData['Name'] : '';
 			$this->sReplyTo = !empty($aData['ReplyTo']) ? $aData['ReplyTo'] : '';
@@ -191,5 +193,13 @@ class Identity
 	public function Validate()
 	{
 		return !empty($this->sEmail);
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function IsAccountIdentities()
+	{
+		return '' === $this->Id();
 	}
 }

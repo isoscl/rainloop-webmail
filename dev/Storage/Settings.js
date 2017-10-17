@@ -1,54 +1,46 @@
 
-(function () {
+import window from 'window';
+import {isUnd, isNormal, isArray, inArray} from 'Common/Utils';
 
-	'use strict';
+let SETTINGS = window.__rlah_data() || null;
+SETTINGS = isNormal(SETTINGS) ? SETTINGS : {};
 
-	var
-		window = require('window'),
+let APP_SETTINGS = SETTINGS.System || null;
+APP_SETTINGS = isNormal(APP_SETTINGS) ? APP_SETTINGS : {};
 
-		Utils = require('Common/Utils')
-	;
+/**
+ * @param {string} name
+ * @returns {*}
+ */
+export function settingsGet(name)
+{
+	return isUnd(SETTINGS[name]) ? null : SETTINGS[name];
+}
 
-	/**
-	 * @constructor
-	 */
-	function SettingsStorage()
-	{
-		this.oSettings = window['rainloopAppData'] || {};
-		this.oSettings = Utils.isNormal(this.oSettings) ? this.oSettings : {};
-	}
+/**
+ * @param {string} name
+ * @param {*} value
+ */
+export function settingsSet(name, value)
+{
+	SETTINGS[name] = value;
+}
 
-	SettingsStorage.prototype.oSettings = null;
+/**
+ * @param {string} name
+ * @returns {*}
+ */
+export function appSettingsGet(name)
+{
+	return isUnd(APP_SETTINGS[name]) ? null : APP_SETTINGS[name];
+}
 
-	/**
-	 * @param {string} sName
-	 * @return {?}
-	 */
-	SettingsStorage.prototype.settingsGet = function (sName)
-	{
-		return Utils.isUnd(this.oSettings[sName]) ? null : this.oSettings[sName];
-	};
-
-	/**
-	 * @param {string} sName
-	 * @param {?} mValue
-	 */
-	SettingsStorage.prototype.settingsSet = function (sName, mValue)
-	{
-		this.oSettings[sName] = mValue;
-	};
-
-	/**
-	 * @param {string} sName
-	 * @return {boolean}
-	 */
-	SettingsStorage.prototype.capa = function (sName)
-	{
-		var mCapa = this.settingsGet('Capa');
-		return Utils.isArray(mCapa) && Utils.isNormal(sName) && -1 < Utils.inArray(sName, mCapa);
-	};
-
-
-	module.exports = new SettingsStorage();
-
-}());
+/**
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function capa(name)
+{
+	const values = settingsGet('Capa');
+	return isArray(values) && isNormal(name) && -1 < inArray(name, values);
+}

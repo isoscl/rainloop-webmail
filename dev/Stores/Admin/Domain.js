@@ -1,21 +1,13 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
-
-	var
-		ko = require('ko')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function DomainAdminStore()
-	{
+class DomainAdminStore
+{
+	constructor() {
 		this.domains = ko.observableArray([]);
 		this.domains.loading = ko.observable(false).extend({'throttle': 100});
+		this.domainsWithoutAliases = this.domains.filter((item) => item && !item.alias);
 	}
+}
 
-	module.exports = new DomainAdminStore();
-
-}());
+export default new DomainAdminStore();

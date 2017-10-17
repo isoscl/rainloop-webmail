@@ -1,86 +1,73 @@
 
-(function () {
+import window from 'window';
+import {killCtrlACtrlS, detectDropdownVisibility, createCommandLegacy, domReady} from 'Common/Utils';
+import {$win, $html, data as GlobalsData, bMobileDevice} from 'Common/Globals';
+import * as Enums from 'Common/Enums';
+import * as Plugins from 'Common/Plugins';
+import {i18n} from 'Common/Translator';
+import {EmailModel} from 'Model/Email';
 
-	'use strict';
+export default (App) => {
 
-	module.exports = function (App) {
+	GlobalsData.__APP__ = App;
 
-		var
-			window = require('window'),
-			_ = require('_'),
-			$ = require('$'),
+	$win
+		.on('keydown', killCtrlACtrlS)
+		.on('unload', () => {
+			GlobalsData.bUnload = true;
+		});
 
-			Globals = require('Common/Globals'),
-			Plugins = require('Common/Plugins'),
-			Utils = require('Common/Utils'),
-			Enums = require('Common/Enums'),
-			Translator = require('Common/Translator'),
+	$html
+		.addClass(bMobileDevice ? 'mobile' : 'no-mobile')
+		.on('click.dropdown.data-api', detectDropdownVisibility);
 
-			EmailModel = require('Model/Email')
-		;
+	const rl = window.rl || {};
 
-		Globals.__APP__ = App;
+	rl.i18n = i18n;
+	rl.createCommand = createCommandLegacy;
 
-		Globals.$win
-			.keydown(Utils.killCtrlAandS)
-			.keyup(Utils.killCtrlAandS)
-			.unload(function () {
-				Globals.bUnload = true;
-			})
-		;
+	rl.addSettingsViewModel = Plugins.addSettingsViewModel;
+	rl.addSettingsViewModelForAdmin = Plugins.addSettingsViewModelForAdmin;
 
-		Globals.$html
-			.addClass(Globals.bMobileDevice ? 'mobile' : 'no-mobile')
-			.on('click.dropdown.data-api', function () {
-				Utils.detectDropdownVisibility();
-			})
-		;
+	rl.addHook = Plugins.addHook;
+	rl.settingsGet = Plugins.mainSettingsGet;
+	rl.pluginSettingsGet = Plugins.settingsGet;
+	rl.pluginRemoteRequest = Plugins.remoteRequest;
 
-		// export
-		window['rl'] = window['rl'] || {};
-		window['rl']['i18n'] = _.bind(Translator.i18n, Translator);
-		window['rl']['addHook'] = _.bind(Plugins.addHook, Plugins);
-		window['rl']['settingsGet'] = _.bind(Plugins.mainSettingsGet, Plugins);
-		window['rl']['remoteRequest'] = _.bind(Plugins.remoteRequest, Plugins);
-		window['rl']['pluginSettingsGet'] = _.bind(Plugins.settingsGet, Plugins);
-		window['rl']['createCommand'] = Utils.createCommand;
+	rl.EmailModel = EmailModel;
+	rl.Enums = Enums;
 
-		window['rl']['EmailModel'] = EmailModel;
-		window['rl']['Enums'] = Enums;
+	window.rl = rl;
 
-		window['__APP_BOOT'] = function (fCall) {
+	window.__APP_BOOT = (fErrorCallback) => {
 
-			$(function () {
+		domReady(() => {
 
-				if (!$('#rl-content').is(':visible'))
+			window.setTimeout(() => {
+
+				if (window.rainloopTEMPLATES && window.rainloopTEMPLATES[0])
 				{
-					Globals.$html.addClass('no-css');
-				}
+					window.document.getElementById('rl-templates').innerHTML = window.rainloopTEMPLATES[0];
 
-				if (window['rainloopTEMPLATES'] && window['rainloopTEMPLATES'][0])
-				{
-					$('#rl-templates').html(window['rainloopTEMPLATES'][0]);
+					window.setTimeout(() => {
 
-					_.delay(function () {
+						$html
+							.removeClass('no-js rl-booted-trigger')
+							.addClass('rl-booted');
 
 						App.bootstart();
 
-						Globals.$html
-							.removeClass('no-js rl-booted-trigger')
-							.addClass('rl-booted')
-						;
-
-					}, 10);
+					}, Enums.Magics.Time10ms);
 				}
 				else
 				{
-					fCall(false);
+					fErrorCallback();
 				}
 
-				window['__APP_BOOT'] = null;
-			});
-		};
+				window.__APP_BOOT = null;
 
+			}, Enums.Magics.Time10ms);
+
+		});
 	};
-
-}());
+};

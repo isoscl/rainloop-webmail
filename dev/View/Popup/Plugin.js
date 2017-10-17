@@ -1,32 +1,25 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
+import key from 'key';
 
-	'use strict';
+import {KeyState, Magics, StorageResultType, Notification} from 'Common/Enums';
+import {isNonEmptyArray, delegateRun} from 'Common/Utils';
+import {getNotification, i18n} from 'Common/Translator';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
-		key = require('key'),
+import Remote from 'Remote/Admin/Ajax';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import {popup, command, isPopupVisible, showScreenPopup} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Remote = require('Storage/Admin/Remote'),
-
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function PluginPopupView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsPlugin');
-
-		var self = this;
+@popup({
+	name: 'View/Popup/Plugin',
+	templateID: 'PopupsPlugin'
+})
+class PluginPopupView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
 		this.onPluginSettingsUpdateResponse = _.bind(this.onPluginSettingsUpdateResponse, this);
 
@@ -37,136 +30,111 @@
 
 		this.configures = ko.observableArray([]);
 
-		this.hasReadme = ko.computed(function () {
-			return '' !== this.readme();
-		}, this);
-
-		this.hasConfiguration = ko.computed(function () {
-			return 0 < this.configures().length;
-		}, this);
+		this.hasReadme = ko.computed(() => '' !== this.readme());
+		this.hasConfiguration = ko.computed(() => 0 < this.configures().length);
 
 		this.readmePopoverConf = {
-			'placement': 'top',
+			'placement': 'right',
 			'trigger': 'hover',
-			'title': 'About',
+			'title': i18n('POPUPS_PLUGIN/TOOLTIP_ABOUT_TITLE'),
 			'container': 'body',
-			'content': function () {
-				return self.readme();
-			}
+			'html': true,
+			'content': () => `<pre>${this.readme()}</pre>`
 		};
 
-		this.saveCommand = Utils.createCommand(this, function () {
-
-			var oList = {};
-
-			oList['Name'] = this.name();
-
-			_.each(this.configures(), function (oItem) {
-
-				var mValue = oItem.value();
-				if (false === mValue || true === mValue)
-				{
-					mValue = mValue ? '1' : '0';
-				}
-
-				oList['_' + oItem['Name']] = mValue;
-
-			}, this);
-
-			this.saveError('');
-			Remote.pluginSettingsUpdate(this.onPluginSettingsUpdateResponse, oList);
-
-		}, this.hasConfiguration);
-
 		this.bDisabeCloseOnEsc = true;
-		this.sDefaultKeyScope = Enums.KeyState.All;
+		this.sDefaultKeyScope = KeyState.All;
 
-		this.tryToClosePopup = _.debounce(_.bind(this.tryToClosePopup, this), 200);
-
-		kn.constructorEnd(this);
+		this.tryToClosePopup = _.debounce(_.bind(this.tryToClosePopup, this), Magics.Time200ms);
 	}
 
-	kn.extendAsViewModel(['View/Popup/Plugin', 'PopupsPluginViewModel'], PluginPopupView);
-	_.extend(PluginPopupView.prototype, AbstractView.prototype);
+	@command((self) => self.hasConfiguration())
+	saveCommand() {
 
-	PluginPopupView.prototype.onPluginSettingsUpdateResponse = function (sResult, oData)
-	{
-		if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
+		const list = {};
+		list.Name = this.name();
+
+		_.each(this.configures(), (oItem) => {
+			let value = oItem.value();
+			if (false === value || true === value)
+			{
+				value = value ? '1' : '0';
+			}
+			list['_' + oItem.Name] = value;
+		});
+
+		this.saveError('');
+		Remote.pluginSettingsUpdate(this.onPluginSettingsUpdateResponse, list);
+	}
+
+	onPluginSettingsUpdateResponse(result, data) {
+		if (StorageResultType.Success === result && data && data.Result)
 		{
 			this.cancelCommand();
 		}
 		else
 		{
 			this.saveError('');
-			if (oData && oData.ErrorCode)
+			if (data && data.ErrorCode)
 			{
-				this.saveError(Translator.getNotification(oData.ErrorCode));
+				this.saveError(getNotification(data.ErrorCode));
 			}
 			else
 			{
-				this.saveError(Translator.getNotification(Enums.Notification.CantSavePluginSettings));
+				this.saveError(getNotification(Notification.CantSavePluginSettings));
 			}
 		}
-	};
+	}
 
-	PluginPopupView.prototype.onShow = function (oPlugin)
-	{
+	onShow(oPlugin) {
 		this.name();
 		this.readme();
 		this.configures([]);
 
 		if (oPlugin)
 		{
-			this.name(oPlugin['Name']);
-			this.readme(oPlugin['Readme']);
+			this.name(oPlugin.Name);
+			this.readme(oPlugin.Readme);
 
-			var aConfig = oPlugin['Config'];
-			if (Utils.isNonEmptyArray(aConfig))
+			const config = oPlugin.Config;
+			if (isNonEmptyArray(config))
 			{
-				this.configures(_.map(aConfig, function (aItem) {
-					return {
-						'value': ko.observable(aItem[0]),
-						'placeholder': ko.observable(aItem[6]),
-						'Name': aItem[1],
-						'Type': aItem[2],
-						'Label': aItem[3],
-						'Default': aItem[4],
-						'Desc': aItem[5]
-					};
-				}));
+				this.configures(_.map(config, (item) => ({
+					'value': ko.observable(item[0]),
+					'placeholder': ko.observable(item[6]),
+					'Name': item[1],
+					'Type': item[2],
+					'Label': item[3],
+					'Default': item[4],
+					'Desc': item[5]
+				})));
 			}
 		}
-	};
+	}
 
-	PluginPopupView.prototype.tryToClosePopup = function ()
-	{
-		var
-			self = this,
-			PopupsAskViewModel = require('View/Popup/Ask')
-		;
-
-		if (!kn.isPopupVisible(PopupsAskViewModel))
+	tryToClosePopup() {
+		const PopupsAskViewModel = require('View/Popup/Ask');
+		if (!isPopupVisible(PopupsAskViewModel))
 		{
-			kn.showScreenPopup(PopupsAskViewModel, [Translator.i18n('POPUPS_ASK/DESC_WANT_CLOSE_THIS_WINDOW'), function () {
-				if (self.modalVisibility())
+			showScreenPopup(PopupsAskViewModel, [i18n('POPUPS_ASK/DESC_WANT_CLOSE_THIS_WINDOW'), () => {
+				if (this.modalVisibility())
 				{
-					Utils.delegateRun(self, 'cancelCommand');
+					delegateRun(this, 'cancelCommand');
 				}
 			}]);
 		}
-	};
+	}
 
-	PluginPopupView.prototype.onBuild = function ()
-	{
-		key('esc', Enums.KeyState.All, _.bind(function () {
+	onBuild() {
+		key('esc', KeyState.All, () => {
 			if (this.modalVisibility())
 			{
 				this.tryToClosePopup();
 			}
+
 			return false;
-		}, this));
-	};
+		});
+	}
+}
 
-	module.exports = PluginPopupView;
-
-}());
+export {PluginPopupView, PluginPopupView as default};

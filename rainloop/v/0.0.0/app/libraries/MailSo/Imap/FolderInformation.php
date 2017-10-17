@@ -63,6 +63,11 @@ class FolderInformation
 	public $Uidnext;
 
 	/**
+	 * @var string
+	 */
+	public $HighestModSeq;
+
+	/**
 	 * @access private
 	 *
 	 * @param string $sFolderName
@@ -79,6 +84,7 @@ class FolderInformation
 
 		$this->Unread = null;
 		$this->Uidnext = null;
+		$this->HighestModSeq = null;
 	}
 
 	/**
@@ -99,6 +105,8 @@ class FolderInformation
 	 */
 	public function IsFlagSupported($sFlag)
 	{
-		return \in_array('\\*', $this->PermanentFlags) || \in_array($sFlag, $this->PermanentFlags);
+		return \in_array('\\*', $this->PermanentFlags) ||
+			\in_array($sFlag, $this->PermanentFlags) ||
+			\in_array($sFlag, $this->Flags);
 	}
 }

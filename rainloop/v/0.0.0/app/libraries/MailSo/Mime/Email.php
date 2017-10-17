@@ -30,11 +30,6 @@ class Email
 	/**
 	 * @var string
 	 */
-	private $sRemark;
-
-	/**
-	 * @var string
-	 */
 	private $sDkimStatus;
 
 	/**
@@ -47,20 +42,20 @@ class Email
 	 *
 	 * @param string $sEmail
 	 * @param string $sDisplayName = ''
-	 * @param string $sRemark = ''
 	 *
 	 * @throws \MailSo\Base\Exceptions\InvalidArgumentException
 	 */
-	private function __construct($sEmail, $sDisplayName = '', $sRemark = '')
+	private function __construct($sEmail, $sDisplayName = '')
 	{
 		if (!\MailSo\Base\Validator::NotEmptyString($sEmail, true))
 		{
 			throw new \MailSo\Base\Exceptions\InvalidArgumentException();
 		}
 
-		$this->sEmail = \MailSo\Base\Utils::IdnToAscii(\trim($sEmail), true);
-		$this->sDisplayName = \trim($sDisplayName);
-		$this->sRemark = \trim($sRemark);
+		$this->sEmail = \MailSo\Base\Utils::IdnToAscii(
+			\MailSo\Base\Utils::Trim($sEmail), true);
+
+		$this->sDisplayName = \MailSo\Base\Utils::Trim($sDisplayName);
 
 		$this->sDkimStatus = \MailSo\Mime\Enumerations\DkimStatus::NONE;
 		$this->sDkimValue = '';
@@ -69,15 +64,14 @@ class Email
 	/**
 	 * @param string $sEmail
 	 * @param string $sDisplayName = ''
-	 * @param string $sRemark = ''
 	 *
 	 * @return \MailSo\Mime\Email
 	 *
 	 * @throws \MailSo\Base\Exceptions\InvalidArgumentException
 	 */
-	public static function NewInstance($sEmail, $sDisplayName = '', $sRemark = '')
+	public static function NewInstance($sEmail, $sDisplayName = '')
 	{
-		return new self($sEmail, $sDisplayName, $sRemark);
+		return new self($sEmail, $sDisplayName);
 	}
 
 	/**
@@ -88,6 +82,7 @@ class Email
 	 */
 	public static function Parse($sEmailAddress)
 	{
+		$sEmailAddress = \MailSo\Base\Utils::Trim($sEmailAddress);
 		if (!\MailSo\Base\Validator::NotEmptyString($sEmailAddress, true))
 		{
 			throw new \MailSo\Base\Exceptions\InvalidArgumentException();
@@ -198,6 +193,8 @@ class Email
 		}
 
 		$sEmail = \trim(\trim($sEmail), '<>');
+		$sEmail = \rtrim(\trim($sEmail), '.');
+		$sEmail = \trim($sEmail);
 
 		$sName = \trim(\trim($sName), '"');
 		$sName = \trim($sName, '\'');
@@ -207,7 +204,7 @@ class Email
 		$sName = \preg_replace('/\\\\(.)/s', '$1', $sName);
 		$sComment = \preg_replace('/\\\\(.)/s', '$1', $sComment);
 
-		return Email::NewInstance($sEmail, $sName, $sComment);
+		return Email::NewInstance($sEmail, $sName);
 	}
 
 	/**
@@ -226,14 +223,6 @@ class Email
 	public function GetDisplayName()
 	{
 		return $this->sDisplayName;
-	}
-
-	/**
-	 * @return string
-	 */
-	public function GetRemark()
-	{
-		return $this->sRemark;
 	}
 
 	/**
@@ -282,13 +271,15 @@ class Email
 
 	/**
 	 * @param bool $bIdn = false
+	 * @param bool $bDkim = true
 	 *
 	 * @return array
 	 */
-	public function ToArray($bIdn = false)
+	public function ToArray($bIdn = false, $bDkim = true)
 	{
-		return array($this->sDisplayName, $this->GetEmail($bIdn), $this->sRemark,
-			$this->sDkimStatus, $this->sDkimValue);
+		return $bDkim ?
+			array($this->sDisplayName, $this->GetEmail($bIdn), $this->sDkimStatus, $this->sDkimValue) :
+			array($this->sDisplayName, $this->GetEmail($bIdn));
 	}
 
 	/**
@@ -301,29 +292,21 @@ class Email
 	{
 		$sReturn = '';
 
-		$sRemark = \str_replace(')', '\)', $this->sRemark);
 		$sDisplayName = \str_replace('"', '\"', $this->sDisplayName);
-
 		if ($bConvertSpecialsName)
 		{
 			$sDisplayName = 0 === \strlen($sDisplayName) ? '' : \MailSo\Base\Utils::EncodeUnencodedValue(
 				\MailSo\Base\Enumerations\Encoding::BASE64_SHORT,
 				$sDisplayName);
-
-			$sRemark = 0 === \strlen($sRemark) ? '' : \MailSo\Base\Utils::EncodeUnencodedValue(
-				\MailSo\Base\Enumerations\Encoding::BASE64_SHORT,
-				$sRemark);
 		}
 
 		$sDisplayName = 0 === \strlen($sDisplayName) ? '' : '"'.$sDisplayName.'"';
-		$sRemark = 0 === \strlen($sRemark) ? '' : '('.$sRemark.')';
-
 		if (0 < \strlen($this->sEmail))
 		{
 			$sReturn = $this->GetEmail($bIdn);
-			if (0 < \strlen($sDisplayName.$sRemark))
+			if (0 < \strlen($sDisplayName))
 			{
-				$sReturn = $sDisplayName.' <'.$sReturn.'> '.$sRemark;
+				$sReturn = $sDisplayName.' <'.$sReturn.'>';
 			}
 		}
 

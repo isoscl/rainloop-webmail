@@ -1,92 +1,87 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {delegateRunOnDestroy, boolToAjax} from 'Common/Utils';
+import {Magics} from 'Common/Enums';
+import {bIsHttps} from 'Common/Globals';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import PgpStore from 'Stores/User/Pgp';
+import SettingsStore from 'Stores/User/Settings';
 
-		Utils = require('Common/Utils'),
+import Remote from 'Remote/User/Ajax';
 
-		kn = require('Knoin/Knoin'),
+import {getApp} from 'Helper/Apps/User';
 
-		PgpStore = require('Stores/User/Pgp')
-	;
+import {showScreenPopup} from 'Knoin/Knoin';
 
-	/**
-	 * @constructor
-	 */
-	function OpenPgpUserSettings()
-	{
+class OpenPgpUserSettings
+{
+	constructor() {
 		this.openpgpkeys = PgpStore.openpgpkeys;
 		this.openpgpkeysPublic = PgpStore.openpgpkeysPublic;
 		this.openpgpkeysPrivate = PgpStore.openpgpkeysPrivate;
 
-		this.openPgpKeyForDeletion = ko.observable(null).extend({'falseTimeout': 3000}).extend({'toggleSubscribe': [this,
-			function (oPrev) {
-				if (oPrev)
-				{
-					oPrev.deleteAccess(false);
-				}
-			}, function (oNext) {
-				if (oNext)
-				{
-					oNext.deleteAccess(true);
-				}
-			}
-		]});
+		this.openPgpKeyForDeletion = ko.observable(null).deleteAccessHelper();
+
+		this.allowDraftAutosave = SettingsStore.allowDraftAutosave;
+
+		this.isHttps = bIsHttps;
 	}
 
-	OpenPgpUserSettings.prototype.addOpenPgpKey = function ()
-	{
-		kn.showScreenPopup(require('View/Popup/AddOpenPgpKey'));
-	};
+	addOpenPgpKey() {
+		showScreenPopup(require('View/Popup/AddOpenPgpKey'));
+	}
 
-	OpenPgpUserSettings.prototype.generateOpenPgpKey = function ()
-	{
-		kn.showScreenPopup(require('View/Popup/NewOpenPgpKey'));
-	};
+	generateOpenPgpKey() {
+		showScreenPopup(require('View/Popup/NewOpenPgpKey'));
+	}
 
-	OpenPgpUserSettings.prototype.viewOpenPgpKey = function (oOpenPgpKey)
-	{
-		if (oOpenPgpKey)
+	viewOpenPgpKey(openPgpKey) {
+		if (openPgpKey)
 		{
-			kn.showScreenPopup(require('View/Popup/ViewOpenPgpKey'), [oOpenPgpKey]);
+			showScreenPopup(require('View/Popup/ViewOpenPgpKey'), [openPgpKey]);
 		}
-	};
+	}
 
 	/**
-	 * @param {OpenPgpKeyModel} oOpenPgpKeyToRemove
+	 * @param {OpenPgpKeyModel} openPgpKeyToRemove
+	 * @returns {void}
 	 */
-	OpenPgpUserSettings.prototype.deleteOpenPgpKey = function (oOpenPgpKeyToRemove)
-	{
-		if (oOpenPgpKeyToRemove && oOpenPgpKeyToRemove.deleteAccess())
+	deleteOpenPgpKey(openPgpKeyToRemove) {
+		if (openPgpKeyToRemove && openPgpKeyToRemove.deleteAccess())
 		{
 			this.openPgpKeyForDeletion(null);
 
-			if (oOpenPgpKeyToRemove && PgpStore.openpgpKeyring)
+			if (openPgpKeyToRemove && PgpStore.openpgpKeyring)
 			{
-				var oFindedItem = _.find(PgpStore.openpgpkeys(), function (oOpenPgpKey) {
-					return oOpenPgpKeyToRemove === oOpenPgpKey;
-				});
-
-				if (oFindedItem)
+				const findedItem = _.find(PgpStore.openpgpkeys(), (key) => openPgpKeyToRemove === key);
+				if (findedItem)
 				{
-					PgpStore.openpgpkeys.remove(oFindedItem);
-					Utils.delegateRunOnDestroy(oFindedItem);
+					PgpStore.openpgpkeys.remove(findedItem);
+					delegateRunOnDestroy(findedItem);
 
-					PgpStore.openpgpKeyring[oFindedItem.isPrivate ? 'privateKeys' : 'publicKeys']
-						.removeForId(oFindedItem.guid);
+					PgpStore
+						.openpgpKeyring[findedItem.isPrivate ? 'privateKeys' : 'publicKeys']
+						.removeForId(findedItem.guid);
 
 					PgpStore.openpgpKeyring.store();
 				}
 
-				require('App/User').reloadOpenPgpKeys();
+				getApp().reloadOpenPgpKeys();
 			}
 		}
-	};
+	}
 
-	module.exports = OpenPgpUserSettings;
+	onBuild() {
+		_.delay(() => {
 
-}());
+			this.allowDraftAutosave.subscribe(
+				Remote.saveSettingsHelper('AllowDraftAutosave', boolToAjax)
+			);
+
+		}, Magics.Time50ms);
+	}
+}
+
+export {OpenPgpUserSettings, OpenPgpUserSettings as default};

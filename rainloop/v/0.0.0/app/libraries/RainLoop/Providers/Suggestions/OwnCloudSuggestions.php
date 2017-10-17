@@ -18,19 +18,40 @@ class OwnCloudSuggestions implements \RainLoop\Providers\Suggestions\ISuggestion
 	 */
 	public function Process($oAccount, $sQuery, $iLimit = 20)
 	{
+		$iInputLimit = $iLimit;
 		$aResult = array();
+		$sQuery = \trim($sQuery);
 
 		try
 		{
-			if (!$oAccount || !\RainLoop\Utils::IsOwnCloud() ||
-				!\class_exists('\\OCP\\Contacts') || !\OCP\Contacts::isEnabled() ||
-				!\class_exists('\\OCP\\User') || !\OCP\User::isLoggedIn()
-			)
+			if ('' === $sQuery || !$oAccount || !\RainLoop\Utils::IsOwnCloudLoggedIn())
 			{
 				return $aResult;
 			}
 
-			$aSearchResult = \OCP\Contacts::search($sQuery, array('FN', 'EMAIL'));
+			$aParams = array('FN', 'NICKNAME', 'TITLE', 'EMAIL');
+			if (\class_exists('OC') && isset(\OC::$server) && \method_exists(\OC::$server, 'getContactsManager'))
+			{
+				$cm = \OC::$server->getContactsManager();
+				if (!$cm && !$cm->isEnabled())
+				{
+					return $aResult;
+				}
+
+				$aSearchResult = $cm->search($sQuery, $aParams);
+			}
+			else if (\class_exists('OCP\Contacts') && \OCP\Contacts::isEnabled())
+			{
+				$aSearchResult = \OCP\Contacts::search($sQuery, $aParams);
+			}
+			else
+			{
+				return $aResult;
+			}
+
+			//$this->oLogger->WriteDump($aSearchResult);
+
+			$aHashes = array();
 			if (\is_array($aSearchResult) && 0 < \count($aSearchResult))
 			{
 				foreach ($aSearchResult as $aContact)
@@ -43,8 +64,13 @@ class OwnCloudSuggestions implements \RainLoop\Providers\Suggestions\ISuggestion
 					$sUid = empty($aContact['UID']) ? '' : $aContact['UID'];
 					if (!empty($sUid))
 					{
-						$sFullName = isset($aContact['FN']) ? \trim($aContact['FN']) : '';
 						$mEmails = isset($aContact['EMAIL']) ? $aContact['EMAIL'] : '';
+
+						$sFullName = isset($aContact['FN']) ? \trim($aContact['FN']) : '';
+						if (empty($sFullName))
+						{
+							$sFullName = isset($aContact['NICKNAME']) ? \trim($aContact['NICKNAME']) : '';
+						}
 
 						if (!\is_array($mEmails))
 						{
@@ -53,20 +79,21 @@ class OwnCloudSuggestions implements \RainLoop\Providers\Suggestions\ISuggestion
 
 						foreach ($mEmails as $sEmail)
 						{
-							$sEmail = \trim($sEmail);
-							if (!empty($sEmail))
+							$sHash = '"'.$sFullName.'" <'.$sEmail.'>';
+							if (!isset($aHashes[$sHash]))
 							{
+								$aHashes[$sHash] = true;
+								$aResult[] = array($sEmail, $sFullName);
 								$iLimit--;
-								$aResult[$sUid] = array($sEmail, $sFullName);
 							}
 						}
 					}
 				}
 
-				$aResult = \array_values($aResult);
+				$aResult = \array_slice($aResult, 0, $iInputLimit);
 			}
 
-			unset($aSearchResult);
+			unset($aSearchResult, $aHashes);
 		}
 		catch (\Exception $oException)
 		{

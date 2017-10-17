@@ -1,29 +1,25 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {StorageResultType, Notification} from 'Common/Enums';
+import {trim} from 'Common/Utils';
+import {getNotification} from 'Common/Translator';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import Remote from 'Remote/User/Ajax';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import {getApp} from 'Helper/Apps/User';
 
-		Remote = require('Storage/User/Remote'),
+import {popup, command} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function AccountPopupView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsAccount');
+@popup({
+	name: 'View/Popup/Account',
+	templateID: 'PopupsAccount'
+})
+class AccountPopupView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
 		this.isNew = ko.observable(true);
 
@@ -33,67 +29,67 @@
 		this.emailError = ko.observable(false);
 		this.passwordError = ko.observable(false);
 
-		this.email.subscribe(function () {
+		this.email.subscribe(() => {
 			this.emailError(false);
-		}, this);
+		});
 
-		this.password.subscribe(function () {
+		this.password.subscribe(() => {
 			this.passwordError(false);
-		}, this);
+		});
 
 		this.submitRequest = ko.observable(false);
 		this.submitError = ko.observable('');
+		this.submitErrorAdditional = ko.observable('');
 
 		this.emailFocus = ko.observable(false);
+	}
 
-		this.addAccountCommand = Utils.createCommand(this, function () {
+	@command((self) => !self.submitRequest())
+	addAccountCommand() {
 
-			this.emailError('' === Utils.trim(this.email()));
-			this.passwordError('' === Utils.trim(this.password()));
+		this.emailError('' === trim(this.email()));
+		this.passwordError('' === trim(this.password()));
 
-			if (this.emailError() || this.passwordError())
+		if (this.emailError() || this.passwordError())
+		{
+			return false;
+		}
+
+		this.submitRequest(true);
+
+		Remote.accountSetup((result, data) => {
+
+			this.submitRequest(false);
+			if (StorageResultType.Success === result && data)
 			{
-				return false;
-			}
-
-			this.submitRequest(true);
-
-			Remote.accountSetup(_.bind(function (sResult, oData) {
-
-				this.submitRequest(false);
-				if (Enums.StorageResultType.Success === sResult && oData && 'AccountSetup' === oData.Action)
+				if (data.Result)
 				{
-					if (oData.Result)
-					{
-						require('App/User').accountsAndIdentities();
-						this.cancelCommand();
-					}
-					else if (oData.ErrorCode)
-					{
-						this.submitError(Translator.getNotification(oData.ErrorCode));
-					}
+					getApp().accountsAndIdentities();
+					this.cancelCommand();
 				}
 				else
 				{
-					this.submitError(Translator.getNotification(Enums.Notification.UnknownError));
+					this.submitError(data.ErrorCode ? getNotification(data.ErrorCode) :
+						getNotification(Notification.UnknownError));
+
+					if (data.ErrorMessageAdditional)
+					{
+						this.submitErrorAdditional(data.ErrorMessageAdditional);
+					}
 				}
+			}
+			else
+			{
+				this.submitError(getNotification(Notification.UnknownError));
+				this.submitErrorAdditional('');
+			}
 
-			}, this), this.email(), this.password(), this.isNew());
+		}, this.email(), this.password(), this.isNew());
 
-			return true;
-
-		}, function () {
-			return !this.submitRequest();
-		});
-
-		kn.constructorEnd(this);
+		return true;
 	}
 
-	kn.extendAsViewModel(['View/Popup/Account', 'View/Popup/AddAccount', 'PopupsAddAccountViewModel'], AccountPopupView);
-	_.extend(AccountPopupView.prototype, AbstractView.prototype);
-
-	AccountPopupView.prototype.clearPopup = function ()
-	{
+	clearPopup() {
 		this.isNew(true);
 
 		this.email('');
@@ -104,23 +100,21 @@
 
 		this.submitRequest(false);
 		this.submitError('');
-	};
+		this.submitErrorAdditional('');
+	}
 
-	AccountPopupView.prototype.onShow = function (oAccount)
-	{
+	onShow(account) {
 		this.clearPopup();
-		if (oAccount && oAccount.canBeEdit())
+		if (account && account.canBeEdit())
 		{
 			this.isNew(false);
-			this.email(oAccount.email);
+			this.email(account.email);
 		}
-	};
+	}
 
-	AccountPopupView.prototype.onFocus = function ()
-	{
+	onShowWithDelay() {
 		this.emailFocus(true);
-	};
+	}
+}
 
-	module.exports = AccountPopupView;
-
-}());
+export {AccountPopupView, AccountPopupView as default};

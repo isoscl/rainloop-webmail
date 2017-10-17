@@ -1,34 +1,22 @@
 
-(function () {
+import {isUnd} from 'Common/Utils';
+import {componentExportHelper} from 'Component/Abstract';
+import {AbstractInput} from 'Component/AbstractInput';
 
-	'use strict';
+const DEFAULT_ROWS = 5;
 
-	var
-		_ = require('_'),
-
-		Utils = require('Common/Utils'),
-
-		AbstractInput = require('Component/AbstractInput')
-	;
-
+class TextAreaComponent extends AbstractInput
+{
 	/**
-	 * @constructor
-	 *
-	 * @param {Object} oParams
-	 *
-	 * @extends AbstractInput
+	 * @param {Object} params
 	 */
-	function TextAreaComponent(oParams)
-	{
-		AbstractInput.call(this, oParams);
+	constructor(params) {
 
-		this.rows = oParams.rows || 5;
-		this.spellcheck = Utils.isUnd(oParams.spellcheck) ? false : !!oParams.spellcheck;
+		super(params);
+
+		this.rows = params.rows || DEFAULT_ROWS;
+		this.spellcheck = isUnd(params.spellcheck) ? false : !!params.spellcheck;
 	}
+}
 
-	_.extend(TextAreaComponent.prototype, AbstractInput.prototype);
-
-	module.exports = AbstractInput.componentExportHelper(
-		TextAreaComponent, 'TextAreaComponent');
-
-}());
+export default componentExportHelper(TextAreaComponent, 'TextAreaComponent');

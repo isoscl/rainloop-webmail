@@ -1,94 +1,101 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {FilterConditionField, FilterConditionType} from 'Common/Enums';
+import {pString} from 'Common/Utils';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
+class FilterConditionModel extends AbstractModel
+{
+	constructor() {
+		super('FilterConditionModel');
 
-		AbstractModel = require('Knoin/AbstractModel')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function FilterConditionModel()
-	{
-		AbstractModel.call(this, 'FilterConditionModel');
-
-		this.field = ko.observable(Enums.FilterConditionField.From);
-		this.type = ko.observable(Enums.FilterConditionType.Contains);
+		this.field = ko.observable(FilterConditionField.From);
+		this.type = ko.observable(FilterConditionType.Contains);
 		this.value = ko.observable('');
 		this.value.error = ko.observable(false);
 
-		this.template = ko.computed(function () {
+		this.valueSecond = ko.observable('');
+		this.valueSecond.error = ko.observable(false);
 
-			var sTemplate = '';
-			switch (this.type())
+		this.template = ko.computed(() => {
+
+			let template = '';
+			switch (this.field())
 			{
+				case FilterConditionField.Size:
+					template = 'SettingsFiltersConditionSize';
+					break;
+				case FilterConditionField.Header:
+					template = 'SettingsFiltersConditionMore';
+					break;
 				default:
-					sTemplate = 'SettingsFiltersConditionDefault';
+					template = 'SettingsFiltersConditionDefault';
 					break;
 			}
 
-			return sTemplate;
+			return template;
 
 		}, this);
+
+		this.field.subscribe(() => {
+			this.value('');
+			this.valueSecond('');
+		});
 
 		this.regDisposables([this.template]);
 	}
 
-	_.extend(FilterConditionModel.prototype, AbstractModel.prototype);
-
-	FilterConditionModel.prototype.verify = function ()
-	{
+	verify() {
 		if ('' === this.value())
 		{
 			this.value.error(true);
 			return false;
 		}
 
-		return true;
-	};
-
-	FilterConditionModel.prototype.parse = function (oItem)
-	{
-		if (oItem && oItem['Field'] && oItem['Type'])
+		if (FilterConditionField.Header === this.field() && '' === this.valueSecond())
 		{
-			this.field(Utils.pString(oItem['Field']));
-			this.type(Utils.pString(oItem['Type']));
-			this.value(Utils.pString(oItem['Value']));
+			this.valueSecond.error(true);
+			return false;
+		}
+
+		return true;
+	}
+
+	parse(json) {
+		if (json && json.Field && json.Type)
+		{
+			this.field(pString(json.Field));
+			this.type(pString(json.Type));
+			this.value(pString(json.Value));
+			this.valueSecond(pString(json.ValueSecond));
 
 			return true;
 		}
 
 		return false;
-	};
+	}
 
-	FilterConditionModel.prototype.toJson = function ()
-	{
+	toJson() {
 		return {
-			'Field': this.field(),
-			'Type': this.type(),
-			'Value': this.value()
+			Field: this.field(),
+			Type: this.type(),
+			Value: this.value(),
+			ValueSecond: this.valueSecond()
 		};
-	};
+	}
 
-	FilterConditionModel.prototype.cloneSelf = function ()
-	{
-		var oClone = new FilterConditionModel();
+	cloneSelf() {
+		const filterCond = new FilterConditionModel();
 
-		oClone.field(this.field());
-		oClone.type(this.type());
-		oClone.value(this.value());
+		filterCond.field(this.field());
+		filterCond.type(this.type());
+		filterCond.value(this.value());
+		filterCond.valueSecond(this.valueSecond());
 
-		return oClone;
-	};
+		return filterCond;
+	}
+}
 
-	module.exports = FilterConditionModel;
-
-}());
+export {FilterConditionModel, FilterConditionModel as default};

@@ -1,162 +1,57 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {pInt, settingsSaveHelperSimpleFunction} from 'Common/Utils';
+import {Capa, SaveSettingsStep} from 'Common/Enums';
+import {i18n, trigger as translatorTrigger} from 'Common/Translator';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {capa} from 'Storage/Settings';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import {showScreenPopup} from 'Knoin/Knoin';
 
-		Remote = require('Storage/User/Remote')
-	;
+import SettinsStore from 'Stores/User/Settings';
 
-	/**
-	 * @constructor
-	 */
-	function SecurityUserSettings()
-	{
-		this.processing = ko.observable(false);
-		this.clearing = ko.observable(false);
-		this.secreting = ko.observable(false);
+import Remote from 'Remote/User/Ajax';
 
-		this.viewUser = ko.observable('');
-		this.viewEnable = ko.observable(false);
-		this.viewEnable.subs = true;
-		this.twoFactorStatus = ko.observable(false);
+class SecurityUserSettings
+{
+	constructor() {
+		this.capaAutoLogout = capa(Capa.AutoLogout);
+		this.capaTwoFactor = capa(Capa.TwoFactor);
 
-		this.viewSecret = ko.observable('');
-		this.viewBackupCodes = ko.observable('');
-		this.viewUrl = ko.observable('');
+		this.autoLogout = SettinsStore.autoLogout;
+		this.autoLogout.trigger = ko.observable(SaveSettingsStep.Idle);
 
-		this.bFirst = true;
-
-		this.viewTwoFactorStatus = ko.computed(function () {
-			Translator.trigger();
-			return Translator.i18n(
-				this.twoFactorStatus() ?
-					'SETTINGS_SECURITY/TWO_FACTOR_SECRET_CONFIGURED_DESC' :
-					'SETTINGS_SECURITY/TWO_FACTOR_SECRET_NOT_CONFIGURED_DESC'
-			);
-		}, this);
-
-		this.onResult = _.bind(this.onResult, this);
-		this.onSecretResult = _.bind(this.onSecretResult, this);
+		this.autoLogoutOptions = ko.computed(() => {
+			translatorTrigger();
+			return [
+				{'id': 0, 'name': i18n('SETTINGS_SECURITY/AUTOLOGIN_NEVER_OPTION_NAME')},
+				{'id': 5, 'name': i18n('SETTINGS_SECURITY/AUTOLOGIN_MINUTES_OPTION_NAME', {'MINUTES': 5})},
+				{'id': 10, 'name': i18n('SETTINGS_SECURITY/AUTOLOGIN_MINUTES_OPTION_NAME', {'MINUTES': 10})},
+				{'id': 30, 'name': i18n('SETTINGS_SECURITY/AUTOLOGIN_MINUTES_OPTION_NAME', {'MINUTES': 30})},
+				{'id': 60, 'name': i18n('SETTINGS_SECURITY/AUTOLOGIN_MINUTES_OPTION_NAME', {'MINUTES': 60})},
+				{'id': 60 * 2, 'name': i18n('SETTINGS_SECURITY/AUTOLOGIN_HOURS_OPTION_NAME', {'HOURS': 2})},
+				{'id': 60 * 5, 'name': i18n('SETTINGS_SECURITY/AUTOLOGIN_HOURS_OPTION_NAME', {'HOURS': 5})},
+				{'id': 60 * 10, 'name': i18n('SETTINGS_SECURITY/AUTOLOGIN_HOURS_OPTION_NAME', {'HOURS': 10})}
+			];
+		});
 	}
 
-	SecurityUserSettings.prototype.showSecret = function ()
-	{
-		this.secreting(true);
-		Remote.showTwoFactorSecret(this.onSecretResult);
-	};
+	configureTwoFactor() {
+		showScreenPopup(require('View/Popup/TwoFactorConfiguration'));
+	}
 
-	SecurityUserSettings.prototype.hideSecret = function ()
-	{
-		this.viewSecret('');
-		this.viewBackupCodes('');
-		this.viewUrl('');
-	};
-
-	SecurityUserSettings.prototype.createTwoFactor = function ()
-	{
-		this.processing(true);
-		Remote.createTwoFactor(this.onResult);
-	};
-
-	SecurityUserSettings.prototype.testTwoFactor = function ()
-	{
-		require('Knoin/Knoin').showScreenPopup(require('View/Popup/TwoFactorTest'));
-	};
-
-	SecurityUserSettings.prototype.clearTwoFactor = function ()
-	{
-		this.viewSecret('');
-		this.viewBackupCodes('');
-		this.viewUrl('');
-
-		this.clearing(true);
-		Remote.clearTwoFactor(this.onResult);
-	};
-
-	SecurityUserSettings.prototype.onShow = function ()
-	{
-		this.viewSecret('');
-		this.viewBackupCodes('');
-		this.viewUrl('');
-	};
-
-	SecurityUserSettings.prototype.onResult = function (sResult, oData)
-	{
-		this.processing(false);
-		this.clearing(false);
-
-		if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
+	onBuild() {
+		if (this.capaAutoLogout)
 		{
-			this.viewUser(Utils.pString(oData.Result.User));
-			this.viewEnable(!!oData.Result.Enable);
-			this.twoFactorStatus(!!oData.Result.IsSet);
+			_.delay(() => {
+				const f0 = settingsSaveHelperSimpleFunction(this.autoLogout.trigger, this);
 
-			this.viewSecret(Utils.pString(oData.Result.Secret));
-			this.viewBackupCodes(Utils.pString(oData.Result.BackupCodes).replace(/[\s]+/g, '  '));
-			this.viewUrl(Utils.pString(oData.Result.Url));
+				this.autoLogout.subscribe(Remote.saveSettingsHelper('AutoLogout', pInt, f0));
+			});
 		}
-		else
-		{
-			this.viewUser('');
-			this.viewEnable(false);
-			this.twoFactorStatus(false);
+	}
+}
 
-			this.viewSecret('');
-			this.viewBackupCodes('');
-			this.viewUrl('');
-		}
-
-		if (this.bFirst)
-		{
-			this.bFirst = false;
-
-			var self = this;
-			this.viewEnable.subscribe(function (bValue) {
-				if (this.viewEnable.subs)
-				{
-					Remote.enableTwoFactor(function (sResult, oData) {
-						if (Enums.StorageResultType.Success !== sResult || !oData || !oData.Result)
-						{
-							self.viewEnable.subs = false;
-							self.viewEnable(false);
-							self.viewEnable.subs = true;
-						}
-					}, bValue);
-				}
-			}, this);
-		}
-	};
-
-	SecurityUserSettings.prototype.onSecretResult = function (sResult, oData)
-	{
-		this.secreting(false);
-
-		if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
-		{
-			this.viewSecret(Utils.pString(oData.Result.Secret));
-			this.viewUrl(Utils.pString(oData.Result.Url));
-		}
-		else
-		{
-			this.viewSecret('');
-			this.viewUrl('');
-		}
-	};
-
-	SecurityUserSettings.prototype.onBuild = function ()
-	{
-		this.processing(true);
-		Remote.getTwoFactor(this.onResult);
-	};
-
-	module.exports = SecurityUserSettings;
-
-}());
+export {SecurityUserSettings, SecurityUserSettings as default};

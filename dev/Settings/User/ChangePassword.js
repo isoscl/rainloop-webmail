@@ -1,24 +1,18 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {StorageResultType, Notification} from 'Common/Enums';
+import {getNotificationFromResponse, i18n} from 'Common/Translator';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import Remote from 'Remote/User/Ajax';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import {getApp} from 'Helper/Apps/User';
+import {command} from 'Knoin/Knoin';
 
-		Remote = require('Storage/User/Remote')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function ChangePasswordUserSettings()
-	{
+class ChangePasswordUserSettings
+{
+	constructor() {
 		this.changeProcess = ko.observable(false);
 
 		this.errorDescription = ko.observable('');
@@ -31,54 +25,49 @@
 		this.newPassword = ko.observable('');
 		this.newPassword2 = ko.observable('');
 
-		this.currentPassword.subscribe(function () {
+		this.currentPassword.subscribe(() => {
 			this.passwordUpdateError(false);
 			this.passwordUpdateSuccess(false);
 			this.currentPassword.error(false);
-		}, this);
+		});
 
-		this.newPassword.subscribe(function () {
+		this.newPassword.subscribe(() => {
 			this.passwordUpdateError(false);
 			this.passwordUpdateSuccess(false);
 			this.passwordMismatch(false);
-		}, this);
+		});
 
-		this.newPassword2.subscribe(function () {
+		this.newPassword2.subscribe(() => {
 			this.passwordUpdateError(false);
 			this.passwordUpdateSuccess(false);
 			this.passwordMismatch(false);
-		}, this);
-
-		this.saveNewPasswordCommand = Utils.createCommand(this, function () {
-
-			if (this.newPassword() !== this.newPassword2())
-			{
-				this.passwordMismatch(true);
-				this.errorDescription(Translator.i18n('SETTINGS_CHANGE_PASSWORD/ERROR_PASSWORD_MISMATCH'));
-			}
-			else
-			{
-				this.changeProcess(true);
-
-				this.passwordUpdateError(false);
-				this.passwordUpdateSuccess(false);
-				this.currentPassword.error(false);
-				this.passwordMismatch(false);
-				this.errorDescription('');
-
-				Remote.changePassword(this.onChangePasswordResponse, this.currentPassword(), this.newPassword());
-			}
-
-		}, function () {
-			return !this.changeProcess() && '' !== this.currentPassword() &&
-				'' !== this.newPassword() && '' !== this.newPassword2();
 		});
 
 		this.onChangePasswordResponse = _.bind(this.onChangePasswordResponse, this);
 	}
 
-	ChangePasswordUserSettings.prototype.onHide = function ()
-	{
+	@command((self) => !self.changeProcess() && '' !== self.currentPassword() && '' !== self.newPassword() && '' !== self.newPassword2())
+	saveNewPasswordCommand() {
+		if (this.newPassword() !== this.newPassword2())
+		{
+			this.passwordMismatch(true);
+			this.errorDescription(i18n('SETTINGS_CHANGE_PASSWORD/ERROR_PASSWORD_MISMATCH'));
+		}
+		else
+		{
+			this.changeProcess(true);
+
+			this.passwordUpdateError(false);
+			this.passwordUpdateSuccess(false);
+			this.currentPassword.error(false);
+			this.passwordMismatch(false);
+			this.errorDescription('');
+
+			Remote.changePassword(this.onChangePasswordResponse, this.currentPassword(), this.newPassword());
+		}
+	}
+
+	onHide() {
 		this.changeProcess(false);
 		this.currentPassword('');
 		this.newPassword('');
@@ -86,16 +75,15 @@
 		this.errorDescription('');
 		this.passwordMismatch(false);
 		this.currentPassword.error(false);
-	};
+	}
 
-	ChangePasswordUserSettings.prototype.onChangePasswordResponse = function (sResult, oData)
-	{
+	onChangePasswordResponse(result, data) {
 		this.changeProcess(false);
 		this.passwordMismatch(false);
 		this.errorDescription('');
 		this.currentPassword.error(false);
 
-		if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
+		if (StorageResultType.Success === result && data && data.Result)
 		{
 			this.currentPassword('');
 			this.newPassword('');
@@ -103,20 +91,20 @@
 
 			this.passwordUpdateSuccess(true);
 			this.currentPassword.error(false);
+
+			getApp().setClientSideToken(data.Result);
 		}
 		else
 		{
-			if (oData && Enums.Notification.CurrentPasswordIncorrect === oData.ErrorCode)
+			if (data && Notification.CurrentPasswordIncorrect === data.ErrorCode)
 			{
 				this.currentPassword.error(true);
 			}
 
 			this.passwordUpdateError(true);
-			this.errorDescription(oData && oData.ErrorCode ? Translator.getNotification(oData.ErrorCode) :
-				Translator.getNotification(Enums.Notification.CouldNotSaveNewPassword));
+			this.errorDescription(getNotificationFromResponse(data, Notification.CouldNotSaveNewPassword));
 		}
-	};
+	}
+}
 
-	module.exports = ChangePasswordUserSettings;
-
-}());
+export {ChangePasswordUserSettings, ChangePasswordUserSettings as default};

@@ -165,8 +165,8 @@ abstract class NetClient
 	 */
 	public function SetTimeOuts($iConnectTimeOut = 10, $iSocketTimeOut = 10)
 	{
-		$this->iConnectTimeOut = $iConnectTimeOut;
-		$this->iSocketTimeOut = $iSocketTimeOut;
+		$this->iConnectTimeOut = 5 < $iConnectTimeOut ? $iConnectTimeOut : 5;
+		$this->iSocketTimeOut = 5 < $iSocketTimeOut ? $iSocketTimeOut : 5;
 	}
 
 	/**
@@ -508,8 +508,9 @@ abstract class NetClient
 			}
 			else
 			{
-//				$this->writeLog('Stream Meta: '.
-//					\print_r($aSocketStatus, true), \MailSo\Log\Enumerations\Type::ERROR);
+				$this->writeLog('Stream Meta: '.
+					\print_r($aSocketStatus, true), \MailSo\Log\Enumerations\Type::ERROR);
+
 				$this->writeLogException(
 					new Exceptions\SocketReadException(),
 						\MailSo\Log\Enumerations\Type::ERROR, true);
@@ -556,11 +557,11 @@ abstract class NetClient
 	 *
 	 * @return void
 	 */
-	protected function writeLog($sDesc, $iDescType = \MailSo\Log\Enumerations\Type::INFO)
+	protected function writeLog($sDesc, $iDescType = \MailSo\Log\Enumerations\Type::INFO, $bDiplayCrLf = false)
 	{
 		if ($this->oLogger)
 		{
-			$this->oLogger->Write($sDesc, $iDescType, $this->getLogName());
+			$this->oLogger->Write($sDesc, $iDescType, $this->getLogName(), true, $bDiplayCrLf);
 		}
 	}
 
@@ -572,7 +573,7 @@ abstract class NetClient
 	 */
 	protected function writeLogWithCrlf($sDesc, $iDescType = \MailSo\Log\Enumerations\Type::INFO)
 	{
-		$this->writeLog(\strtr($sDesc, array("\r" => '\r', "\n" => '\n')), $iDescType);
+		$this->writeLog($sDesc, $iDescType, true);
 	}
 
 	/**

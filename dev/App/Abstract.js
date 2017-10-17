@@ -1,161 +1,187 @@
 
-(function () {
+import window from 'window';
+import $ from '$';
+import _ from '_';
+import ko from 'ko';
+import key from 'key';
+import ssm from 'ssm';
 
-	'use strict';
+import {
+	$win, $html, $doc,
+	startMicrotime, leftPanelDisabled, leftPanelType,
+	sUserAgent, bMobileDevice, bAnimationSupported
+} from 'Common/Globals';
 
-	var
-		window = require('window'),
-		_ = require('_'),
-		$ = require('$'),
+import {
+	noop, isNormal, pString, inArray, microtime, timestamp,
+	detectDropdownVisibility, windowResizeCallback
+} from 'Common/Utils';
 
-		Globals = require('Common/Globals'),
-		Utils = require('Common/Utils'),
-		Links = require('Common/Links'),
-		Events = require('Common/Events'),
-		Translator = require('Common/Translator'),
+import {KeyState, Magics} from 'Common/Enums';
+import {root, rootAdmin, rootUser, populateAuthSuffix} from 'Common/Links';
+import {initOnStartOrLangChange, initNotificationLanguage} from 'Common/Translator';
+import {toggle as toggleCmd} from 'Common/Cmd';
+import * as Events from 'Common/Events';
+import * as Settings from 'Storage/Settings';
 
-		Settings = require('Storage/Settings'),
+import LanguageStore from 'Stores/Language';
+import ThemeStore from 'Stores/Theme';
+import SocialStore from 'Stores/Social';
 
-		AbstractBoot = require('Knoin/AbstractBoot')
-	;
+import {routeOff, setHash} from 'Knoin/Knoin';
+import {AbstractBoot} from 'Knoin/AbstractBoot';
 
+class AbstractApp extends AbstractBoot
+{
 	/**
-	 * @constructor
 	 * @param {RemoteStorage|AdminRemoteStorage} Remote
-	 * @extends AbstractBoot
 	 */
-	function AbstractApp(Remote)
+	constructor(Remote)
 	{
-		AbstractBoot.call(this);
+		super();
 
+		this.googlePreviewSupportedCache = null;
 		this.isLocalAutocomplete = true;
+		this.iframe = null;
+		this.lastErrorTime = 0;
 
-		this.iframe = $('<iframe style="display:none" src="javascript:;" />').appendTo('body');
+		this.iframe = $('<iframe class="internal-hiddden" />').appendTo('body');
 
-		Globals.$win.on('error', function (oEvent) {
-			if (oEvent && oEvent.originalEvent && oEvent.originalEvent.message &&
-				-1 === Utils.inArray(oEvent.originalEvent.message, [
+		$win.on('error', (event) => {
+			if (event && event.originalEvent && event.originalEvent.message &&
+				-1 === inArray(event.originalEvent.message, [
 					'Script error.', 'Uncaught Error: Error calling method on NPObject.'
 				]))
 			{
+				const time = timestamp();
+				if (this.lastErrorTime >= time)
+				{
+					return;
+				}
+
+				this.lastErrorTime = time;
+
 				Remote.jsError(
-					Utils.emptyFunction,
-					oEvent.originalEvent.message,
-					oEvent.originalEvent.filename,
-					oEvent.originalEvent.lineno,
+					noop,
+					event.originalEvent.message,
+					event.originalEvent.filename,
+					event.originalEvent.lineno,
 					window.location && window.location.toString ? window.location.toString() : '',
-					Globals.$html.attr('class'),
-					Utils.microtime() - Globals.now
+					$html.attr('class'),
+					microtime() - startMicrotime
 				);
 			}
 		});
 
-		Globals.$win.on('resize', function () {
+		$win.on('resize', () => {
 			Events.pub('window.resize');
 		});
 
-		Events.sub('window.resize', _.throttle(function () {
+		Events.sub('window.resize', _.throttle(() => {
+			const
+				iH = $win.height(),
+				iW = $win.height();
 
-			var
-				iH = Globals.$win.height(),
-				iW = Globals.$win.height()
-			;
-
-			if (Globals.$win.__sizes[0] !== iH || Globals.$win.__sizes[1] !== iW)
+			if ($win.__sizes[0] !== iH || $win.__sizes[1] !== iW)
 			{
-				Globals.$win.__sizes[0] = iH;
-				Globals.$win.__sizes[1] = iW;
+				$win.__sizes[0] = iH;
+				$win.__sizes[1] = iW;
 
 				Events.pub('window.resize.real');
 			}
+		}, Magics.Time50ms));
 
-		}, 50));
+		// DEBUG
+		//		Events.sub({
+		//			'window.resize': function() {
+		//				window.console.log('window.resize');
+		//			},
+		//			'window.resize.real': function() {
+		//				window.console.log('window.resize.real');
+		//			}
+		//		});
 
-		 // TODO
-//		Events.sub({
-//			'window.resize': function () {
-//				window.console.log('window.resize');
-//			},
-//			'window.resize.real': function () {
-//				window.console.log('window.resize.real');
-//			}
-//		});
-
-		Globals.$doc.on('keydown', function (oEvent) {
-			if (oEvent && oEvent.ctrlKey)
+		$doc.on('keydown', (event) => {
+			if (event && event.ctrlKey)
 			{
-				Globals.$html.addClass('rl-ctrl-key-pressed');
+				$html.addClass('rl-ctrl-key-pressed');
 			}
-		}).on('keyup', function (oEvent) {
-			if (oEvent && !oEvent.ctrlKey)
+		}).on('keyup', (event) => {
+			if (event && !event.ctrlKey)
 			{
-				Globals.$html.removeClass('rl-ctrl-key-pressed');
+				$html.removeClass('rl-ctrl-key-pressed');
 			}
 		});
+
+		$doc.on('mousemove keypress click', _.debounce(() => {
+			Events.pub('rl.auto-logout-refresh');
+		}, Magics.Time5s));
+
+		key('esc, enter', KeyState.All, () => {
+			detectDropdownVisibility();
+		});
+
+		if (Settings.appSettingsGet('allowCmdInterface'))
+		{
+			key('ctrl+shift+`', KeyState.All, () => {
+				toggleCmd();
+			});
+		}
 	}
 
-	_.extend(AbstractApp.prototype, AbstractBoot.prototype);
-
-	AbstractApp.prototype.remote = function ()
-	{
+	remote() {
 		return null;
-	};
+	}
 
-	AbstractApp.prototype.data = function ()
-	{
+	data() {
 		return null;
-	};
+	}
+
+	getApplicationConfiguration(name, default_) {
+		return this.applicationConfiguration[name] || default_;
+	}
 
 	/**
-	 * @param {string} sLink
-	 * @return {boolean}
+	 * @param {string} link
+	 * @returns {boolean}
 	 */
-	AbstractApp.prototype.download = function (sLink)
-	{
-		var
-			oE = null,
-			oLink = null,
-			sUserAgent = window.navigator.userAgent.toLowerCase()
-		;
+	download(link) {
 
-		if (sUserAgent && (sUserAgent.indexOf('chrome') > -1 || sUserAgent.indexOf('chrome') > -1))
+		if (sUserAgent && (-1 < sUserAgent.indexOf('chrome') || -1 < sUserAgent.indexOf('chrome')))
 		{
-			oLink = window.document.createElement('a');
-			oLink['href'] = sLink;
+			const oLink = window.document.createElement('a');
+			oLink.href = link;
 
-			if (window.document['createEvent'])
+			if (window.document && window.document.createEvent)
 			{
-				oE = window.document['createEvent']('MouseEvents');
-				if (oE && oE['initEvent'] && oLink['dispatchEvent'])
+				const oE = window.document.createEvent.MouseEvents;
+				if (oE && oE.initEvent && oLink.dispatchEvent)
 				{
-					oE['initEvent']('click', true, true);
-					oLink['dispatchEvent'](oE);
+					oE.initEvent('click', true, true);
+					oLink.dispatchEvent(oE);
 					return true;
 				}
 			}
 		}
 
-		if (Globals.bMobileDevice)
+		if (bMobileDevice)
 		{
-			window.open(sLink, '_self');
+			window.open(link, '_self');
 			window.focus();
 		}
 		else
 		{
-			this.iframe.attr('src', sLink);
-	//		window.document.location.href = sLink;
+			this.iframe.attr('src', link);
+			// window.document.location.href = link;
 		}
 
 		return true;
-	};
-
-	AbstractApp.prototype.googlePreviewSupportedCache = null;
+	}
 
 	/**
-	 * @return {boolean}
+	 * @returns {boolean}
 	 */
-	AbstractApp.prototype.googlePreviewSupported = function ()
-	{
+	googlePreviewSupported() {
 		if (null === this.googlePreviewSupportedCache)
 		{
 			this.googlePreviewSupportedCache = !!Settings.settingsGet('AllowGoogleSocial') &&
@@ -163,82 +189,96 @@
 		}
 
 		return this.googlePreviewSupportedCache;
-	};
+	}
 
 	/**
-	 * @param {string} sTitle
+	 * @param {string} title
 	 */
-	AbstractApp.prototype.setTitle = function (sTitle)
-	{
-		sTitle = ((Utils.isNormal(sTitle) && 0 < sTitle.length) ? sTitle + ' - ' : '') +
-			Settings.settingsGet('Title') || '';
+	setWindowTitle(title) {
+		title = ((isNormal(title) && 0 < title.length) ? '' + title : '');
+		if (Settings.settingsGet('Title'))
+		{
+			title += (title ? ' - ' : '') + Settings.settingsGet('Title');
+		}
 
-		window.document.title = sTitle + ' ...';
-		window.document.title = sTitle;
-	};
+		window.document.title = title + ' ...';
+		window.document.title = title;
+	}
 
-	AbstractApp.prototype.redirectToAdminPanel = function ()
-	{
-		_.delay(function () {
-			window.location.href = Links.rootAdmin();
-		}, 100);
-	};
+	redirectToAdminPanel() {
+		_.delay(() => {
+			window.location.href = rootAdmin();
+		}, Magics.Time100ms);
+	}
 
-	AbstractApp.prototype.clearClientSideToken = function ()
-	{
+	clearClientSideToken() {
 		if (window.__rlah_clear)
 		{
 			window.__rlah_clear();
 		}
-	};
+	}
 
 	/**
-	 * @param {boolean=} bLogout = false
-	 * @param {boolean=} bClose = false
+	 * @param {string} token
 	 */
-	AbstractApp.prototype.loginAndLogoutReload = function (bLogout, bClose)
-	{
-		var
-			kn = require('Knoin/Knoin'),
-			sCustomLogoutLink = Utils.pString(Settings.settingsGet('CustomLogoutLink')),
-			bInIframe = !!Settings.settingsGet('InIframe')
-		;
+	setClientSideToken(token) {
+		if (window.__rlah_set)
+		{
+			window.__rlah_set(token);
 
-		bLogout = Utils.isUnd(bLogout) ? false : !!bLogout;
-		bClose = Utils.isUnd(bClose) ? false : !!bClose;
+			Settings.settingsSet('AuthAccountHash', token);
+			populateAuthSuffix();
+		}
+	}
 
-		if (bLogout)
+	/**
+	 * @param {boolean=} admin = false
+	 * @param {boolean=} logout = false
+	 * @param {boolean=} close = false
+	 */
+	loginAndLogoutReload(admin = false, logout = false, close = false) {
+
+		const inIframe = !!Settings.appSettingsGet('inIframe');
+		let customLogoutLink = pString(Settings.appSettingsGet('customLogoutLink'));
+
+		if (logout)
 		{
 			this.clearClientSideToken();
 		}
 
-		if (bLogout && bClose && window.close)
+		if (logout && close && window.close)
 		{
 			window.close();
 		}
 
-		sCustomLogoutLink = sCustomLogoutLink || './';
-		if (bLogout && window.location.href !== sCustomLogoutLink)
+		customLogoutLink = customLogoutLink || (admin ? rootAdmin() : rootUser());
+
+		if (logout && window.location.href !== customLogoutLink)
 		{
-			_.delay(function () {
-				if (bInIframe && window.parent)
+			_.delay(() => {
+
+				if (inIframe && window.parent)
 				{
-					window.parent.location.href = sCustomLogoutLink;
+					window.parent.location.href = customLogoutLink;
 				}
 				else
 				{
-					window.location.href = sCustomLogoutLink;
+					window.location.href = customLogoutLink;
 				}
-			}, 100);
+
+				$win.trigger('rl.tooltips.diactivate');
+
+			}, Magics.Time100ms);
 		}
 		else
 		{
-			kn.routeOff();
-			kn.setHash(Links.root(), true);
-			kn.routeOff();
+			routeOff();
+			setHash(root(), true);
+			routeOff();
 
-			_.delay(function () {
-				if (bInIframe && window.parent)
+			_.delay(() => {
+
+				if (inIframe && window.parent)
 				{
 					window.parent.location.reload();
 				}
@@ -246,113 +286,132 @@
 				{
 					window.location.reload();
 				}
-			}, 100);
+
+				$win.trigger('rl.tooltips.diactivate');
+
+			}, Magics.Time100ms);
 		}
-	};
+	}
 
-	AbstractApp.prototype.historyBack = function ()
-	{
+	historyBack() {
 		window.history.back();
-	};
+	}
 
-	AbstractApp.prototype.bootstart = function ()
-	{
+	bootstart() {
+
+		// log('Ps' + 'ss, hac' + 'kers! The' + 're\'s not' + 'hing inte' + 'resting :' + ')');
+
 		Events.pub('rl.bootstart');
 
-		var
-			ssm = require('ssm'),
-			ko = require('ko')
-		;
+		const mobile = Settings.appSettingsGet('mobile');
 
-		ko.components.register('SaveTrigger', require('Component/SaveTrigger'));
-		ko.components.register('Input', require('Component/Input'));
-		ko.components.register('Select', require('Component/Select'));
-		ko.components.register('TextArea', require('Component/TextArea'));
-		ko.components.register('Radio', require('Component/Radio'));
+		ko.components.register('SaveTrigger', require('Component/SaveTrigger').default);
+		ko.components.register('Input', require('Component/Input').default);
+		ko.components.register('Select', require('Component/Select').default);
+		ko.components.register('Radio', require('Component/Radio').default);
+		ko.components.register('TextArea', require('Component/TextArea').default);
+		ko.components.register('Date', require('Component/Date').default);
 
-		if (Settings.settingsGet('MaterialDesign') && Globals.bAnimationSupported)
+		ko.components.register('x-script', require('Component/Script').default);
+		// ko.components.register('svg-icon', require('Component/SvgIcon').default);
+
+		if (Settings.appSettingsGet('materialDesign') && bAnimationSupported)
 		{
-			ko.components.register('Checkbox', require('Component/MaterialDesign/Checkbox'));
+			ko.components.register('Checkbox', require('Component/MaterialDesign/Checkbox').default);
+			ko.components.register('CheckboxSimple', require('Component/Checkbox').default);
 		}
 		else
 		{
-//			ko.components.register('Checkbox', require('Component/Classic/Checkbox'));
-			ko.components.register('Checkbox', require('Component/Checkbox'));
+			// ko.components.register('Checkbox', require('Component/Classic/Checkbox').default);
+			// ko.components.register('CheckboxSimple', require('Component/Classic/Checkbox').default);
+			ko.components.register('Checkbox', require('Component/Checkbox').default);
+			ko.components.register('CheckboxSimple', require('Component/Checkbox').default);
 		}
 
-		Translator.initOnStartOrLangChange(Translator.initNotificationLanguage, Translator);
+		initOnStartOrLangChange(initNotificationLanguage);
 
-		_.delay(Utils.windowResizeCallback, 1000);
+		_.delay(windowResizeCallback, Magics.Time1s);
 
-		ssm.addState({
-			'id': 'mobile',
-			'maxWidth': 767,
-			'onEnter': function() {
-				Globals.$html.addClass('ssm-state-mobile');
-				Events.pub('ssm.mobile-enter');
-			},
-			'onLeave': function() {
-				Globals.$html.removeClass('ssm-state-mobile');
-				Events.pub('ssm.mobile-leave');
-			}
+		Events.sub('ssm.mobile-enter', () => {
+			leftPanelDisabled(true);
 		});
 
-		ssm.addState({
-			'id': 'tablet',
-			'minWidth': 768,
-			'maxWidth': 999,
-			'onEnter': function() {
-				Globals.$html.addClass('ssm-state-tablet');
-			},
-			'onLeave': function() {
-				Globals.$html.removeClass('ssm-state-tablet');
-			}
+		Events.sub('ssm.mobile-leave', () => {
+			leftPanelDisabled(false);
 		});
 
-		ssm.addState({
-			'id': 'desktop',
-			'minWidth': 1000,
-			'maxWidth': 1400,
-			'onEnter': function() {
-				Globals.$html.addClass('ssm-state-desktop');
-			},
-			'onLeave': function() {
-				Globals.$html.removeClass('ssm-state-desktop');
-			}
+		if (!mobile)
+		{
+			$html.addClass('rl-desktop');
+
+			ssm.addState({
+				id: 'mobile',
+				query: '(max-width: 767px)',
+				onEnter: () => {
+					$html.addClass('ssm-state-mobile');
+					Events.pub('ssm.mobile-enter');
+				},
+				onLeave: () => {
+					$html.removeClass('ssm-state-mobile');
+					Events.pub('ssm.mobile-leave');
+				}
+			});
+
+			ssm.addState({
+				id: 'tablet',
+				query: '(min-width: 768px) and (max-width: 999px)',
+				onEnter: () => {
+					$html.addClass('ssm-state-tablet');
+				},
+				onLeave: () => {
+					$html.removeClass('ssm-state-tablet');
+				}
+			});
+
+			ssm.addState({
+				id: 'desktop',
+				query: '(min-width: 1000px) and (max-width: 1400px)',
+				onEnter: () => {
+					$html.addClass('ssm-state-desktop');
+				},
+				onLeave: () => {
+					$html.removeClass('ssm-state-desktop');
+				}
+			});
+
+			ssm.addState({
+				id: 'desktop-large',
+				query: '(min-width: 1401px)',
+				onEnter: () => {
+					$html.addClass('ssm-state-desktop-large');
+				},
+				onLeave: () => {
+					$html.removeClass('ssm-state-desktop-large');
+				}
+			});
+		}
+		else
+		{
+			$html.addClass('ssm-state-mobile').addClass('rl-mobile');
+			Events.pub('ssm.mobile-enter');
+		}
+
+		leftPanelDisabled.subscribe((bValue) => {
+			$html.toggleClass('rl-left-panel-disabled', bValue);
+			$html.toggleClass('rl-left-panel-enabled', !bValue);
 		});
 
-		ssm.addState({
-			'id': 'desktop-large',
-			'minWidth': 1400,
-			'onEnter': function() {
-				Globals.$html.addClass('ssm-state-desktop-large');
-			},
-			'onLeave': function() {
-				Globals.$html.removeClass('ssm-state-desktop-large');
-			}
+		leftPanelType.subscribe((sValue) => {
+			$html.toggleClass('rl-left-panel-none', 'none' === sValue);
+			$html.toggleClass('rl-left-panel-short', 'short' === sValue);
 		});
 
-		Events.sub('ssm.mobile-enter', function () {
-			Globals.leftPanelDisabled(true);
-		});
+		leftPanelDisabled.valueHasMutated();
 
-		Events.sub('ssm.mobile-leave', function () {
-			Globals.leftPanelDisabled(false);
-		});
+		LanguageStore.populate();
+		ThemeStore.populate();
+		SocialStore.populate();
+	}
+}
 
-		Globals.leftPanelDisabled.subscribe(function (bValue) {
-			Globals.$html.toggleClass('rl-left-panel-disabled', bValue);
-		});
-
-		ssm.ready();
-
-
-
-		require('Stores/Language').populate();
-		require('Stores/Theme').populate();
-		require('Stores/Social').populate();
-	};
-
-	module.exports = AbstractApp;
-
-}());
+export {AbstractApp, AbstractApp as default};

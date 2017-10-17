@@ -1,6 +1,6 @@
 <?php
 
-class PostfixAdminChangePasswordPlugin extends \RainLoop\Plugins\AbstractPlugin
+class PostfixadminChangePasswordPlugin extends \RainLoop\Plugins\AbstractPlugin
 {
 	public function Init()
 	{
@@ -14,13 +14,13 @@ class PostfixAdminChangePasswordPlugin extends \RainLoop\Plugins\AbstractPlugin
 	{
 		if (!extension_loaded('pdo') || !class_exists('PDO'))
 		{
-			return 'The PHP exention PDO (mysql) must be installed to use this plugin';
+			return 'The PHP extension PDO (mysql) must be installed to use this plugin';
 		}
 
 		$aDrivers = \PDO::getAvailableDrivers();
 		if (!is_array($aDrivers) || !in_array('mysql', $aDrivers))
 		{
-			return 'The PHP exention PDO (mysql) must be installed to use this plugin';
+			return 'The PHP extension PDO (mysql) must be installed to use this plugin';
 		}
 
 		return '';
@@ -44,6 +44,9 @@ class PostfixAdminChangePasswordPlugin extends \RainLoop\Plugins\AbstractPlugin
 					->SetHost($this->Config()->Get('plugin', 'host', ''))
 					->SetPort((int) $this->Config()->Get('plugin', 'port', 3306))
 					->SetDatabase($this->Config()->Get('plugin', 'database', ''))
+					->SetTable($this->Config()->Get('plugin', 'table', ''))
+					->SetUserColumn($this->Config()->Get('plugin', 'usercol', ''))
+					->SetPasswordColumn($this->Config()->Get('plugin', 'passcol', ''))
 					->SetUser($this->Config()->Get('plugin', 'user', ''))
 					->SetPassword($this->Config()->Get('plugin', 'password', ''))
 					->SetEncrypt($this->Config()->Get('plugin', 'encrypt', ''))
@@ -68,6 +71,12 @@ class PostfixAdminChangePasswordPlugin extends \RainLoop\Plugins\AbstractPlugin
 				->SetDefaultValue(3306),
 			\RainLoop\Plugins\Property::NewInstance('database')->SetLabel('MySQL Database')
 				->SetDefaultValue('postfixadmin'),
+			\RainLoop\Plugins\Property::NewInstance('table')->SetLabel('MySQL table')
+				->SetDefaultValue('mailbox'),
+			\RainLoop\Plugins\Property::NewInstance('usercol')->SetLabel('MySQL username column')
+				->SetDefaultValue('username'),
+			\RainLoop\Plugins\Property::NewInstance('passcol')->SetLabel('MySQL password column')
+				->SetDefaultValue('password'),
 			\RainLoop\Plugins\Property::NewInstance('user')->SetLabel('MySQL User')
 				->SetDefaultValue('postfixadmin'),
 			\RainLoop\Plugins\Property::NewInstance('password')->SetLabel('MySQL Password')
@@ -75,7 +84,7 @@ class PostfixAdminChangePasswordPlugin extends \RainLoop\Plugins\AbstractPlugin
 				->SetDefaultValue(''),
 			\RainLoop\Plugins\Property::NewInstance('encrypt')->SetLabel('Encrypt')
 				->SetType(\RainLoop\Enumerations\PluginPropertyType::SELECTION)
-				->SetDefaultValue(array('md5crypt', 'md5', 'system', 'cleartext', 'mysql_encrypt'))
+				->SetDefaultValue(array('md5crypt', 'md5', 'system', 'cleartext', 'mysql_encrypt', 'SHA256-CRYPT', 'SHA512-CRYPT'))
 				->SetDescription('In what way do you want the passwords to be crypted ?'),
 			\RainLoop\Plugins\Property::NewInstance('allowed_emails')->SetLabel('Allowed emails')
 				->SetType(\RainLoop\Enumerations\PluginPropertyType::STRING_TEXT)

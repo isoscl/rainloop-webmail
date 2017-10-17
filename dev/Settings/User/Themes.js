@@ -1,31 +1,24 @@
 
-(function () {
+import _ from '_';
+import $ from '$';
+import ko from 'ko';
 
-	'use strict';
+import Jua from 'Jua';
 
-	var
-		_ = require('_'),
-		$ = require('$'),
-		ko = require('ko'),
+import {SaveSettingsStep, UploadErrorCode, Capa, Magics} from 'Common/Enums';
+import {changeTheme, convertThemeName} from 'Common/Utils';
+import {userBackground, themePreviewLink, uploadBackground} from 'Common/Links';
+import {i18n} from 'Common/Translator';
 
-		Jua = require('Jua'),
+import {capa} from 'Storage/Settings';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Links = require('Common/Links'),
-		Translator = require('Common/Translator'),
+import ThemeStore from 'Stores/Theme';
 
-		ThemeStore = require('Stores/Theme'),
+import Remote from 'Remote/User/Ajax';
 
-		Settings = require('Storage/Settings'),
-		Remote = require('Storage/User/Remote')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function ThemesUserSettings()
-	{
+class ThemesUserSettings
+{
+	constructor() {
 		this.theme = ThemeStore.theme;
 		this.themes = ThemeStore.themes;
 		this.themesObjects = ko.observableArray([]);
@@ -37,148 +30,130 @@
 		this.background.loading = ko.observable(false);
 		this.background.error = ko.observable('');
 
-		this.capaUserBackground = ko.observable(Settings.capa(Enums.Capa.UserBackground));
+		this.capaUserBackground = ko.observable(capa(Capa.UserBackground));
 
-		this.themeTrigger = ko.observable(Enums.SaveSettingsStep.Idle).extend({'throttle': 100});
+		this.themeTrigger = ko.observable(SaveSettingsStep.Idle).extend({throttle: Magics.Time100ms});
 
 		this.iTimer = 0;
 		this.oThemeAjaxRequest = null;
 
-		this.theme.subscribe(function (sValue) {
-
-			_.each(this.themesObjects(), function (oTheme) {
-				oTheme.selected(sValue === oTheme.name);
+		this.theme.subscribe((value) => {
+			_.each(this.themesObjects(), (theme) => {
+				theme.selected(value === theme.name);
 			});
 
-			Utils.changeTheme(sValue, this.themeTrigger);
+			changeTheme(value, this.themeTrigger);
 
 			Remote.saveSettings(null, {
-				'Theme': sValue
+				'Theme': value
 			});
+		});
 
-		}, this);
-
-		this.background.hash.subscribe(function (sValue) {
-
-			var $oBg = $('#rl-bg');
-			if (!sValue)
+		this.background.hash.subscribe((value) => {
+			const $bg = $('#rl-bg');
+			if (!value)
 			{
-				if ($oBg.data('backstretch'))
+				if ($bg.data('backstretch'))
 				{
-					$oBg.backstretch('destroy').attr('style', '');
+					$bg.backstretch('destroy').attr('style', '');
 				}
 			}
 			else
 			{
-				$('#rl-bg').attr('style', 'background-image: none !important;').backstretch(
-					Links.userBackground(sValue), {
-						'fade': 1000, 'centeredX': true, 'centeredY': true
-					}).removeAttr('style');
+				$bg.attr('style', 'background-image: none !important;').backstretch(userBackground(value), {
+					fade: Magics.Time1s, centeredX: true, centeredY: true
+				}).removeAttr('style');
 			}
-
-		}, this);
+		});
 	}
 
-	ThemesUserSettings.prototype.onBuild = function ()
-	{
-		var sCurrentTheme = this.theme();
-		this.themesObjects(_.map(this.themes(), function (sTheme) {
-			return {
-				'name': sTheme,
-				'nameDisplay': Utils.convertThemeName(sTheme),
-				'selected': ko.observable(sTheme === sCurrentTheme),
-				'themePreviewSrc': Links.themePreviewLink(sTheme)
-			};
-		}));
+	onBuild() {
+		const currentTheme = this.theme();
+
+		this.themesObjects(_.map(this.themes(), (theme) => ({
+			name: theme,
+			nameDisplay: convertThemeName(theme),
+			selected: ko.observable(theme === currentTheme),
+			themePreviewSrc: themePreviewLink(theme)
+		})));
 
 		this.initUploader();
-	};
+	}
 
-	ThemesUserSettings.prototype.onShow = function ()
-	{
+	onShow() {
 		this.background.error('');
-	};
+	}
 
-	ThemesUserSettings.prototype.clearBackground = function ()
-	{
+	clearBackground() {
 		if (this.capaUserBackground())
 		{
-			var self = this;
-			Remote.clearUserBackground(function () {
-				self.background.name('');
-				self.background.hash('');
+			Remote.clearUserBackground(() => {
+				this.background.name('');
+				this.background.hash('');
 			});
 		}
-	};
+	}
 
-	ThemesUserSettings.prototype.initUploader = function ()
-	{
+	initUploader() {
 		if (this.background.uploaderButton() && this.capaUserBackground())
 		{
-			var
+			const
 				oJua = new Jua({
-					'action': Links.uploadBackground(),
+					'action': uploadBackground(),
 					'name': 'uploader',
 					'queueSize': 1,
 					'multipleSizeLimit': 1,
 					'disableDragAndDrop': true,
 					'disableMultiple': true,
 					'clickElement': this.background.uploaderButton()
-				})
-			;
+				});
 
 			oJua
-				.on('onStart', _.bind(function () {
-
+				.on('onStart', () => {
 					this.background.loading(true);
 					this.background.error('');
-
 					return true;
-
-				}, this))
-				.on('onComplete', _.bind(function (sId, bResult, oData) {
-
+				})
+				.on('onComplete', (id, result, data) => {
 					this.background.loading(false);
 
-					if (bResult && sId && oData && oData.Result && oData.Result.Name && oData.Result.Hash)
+					if (result && id && data && data.Result && data.Result.Name && data.Result.Hash)
 					{
-						this.background.name(oData.Result.Name);
-						this.background.hash(oData.Result.Hash);
+						this.background.name(data.Result.Name);
+						this.background.hash(data.Result.Hash);
 					}
 					else
 					{
 						this.background.name('');
 						this.background.hash('');
 
-						var sError = '';
-						if (oData.ErrorCode)
+						let errorMsg = '';
+						if (data.ErrorCode)
 						{
-							switch (oData.ErrorCode)
+							switch (data.ErrorCode)
 							{
-								case Enums.UploadErrorCode.FileIsTooBig:
-									sError = Translator.i18n('SETTINGS_THEMES/ERROR_FILE_IS_TOO_BIG');
+								case UploadErrorCode.FileIsTooBig:
+									errorMsg = i18n('SETTINGS_THEMES/ERROR_FILE_IS_TOO_BIG');
 									break;
-								case Enums.UploadErrorCode.FileType:
-									sError = Translator.i18n('SETTINGS_THEMES/ERROR_FILE_TYPE_ERROR');
+								case UploadErrorCode.FileType:
+									errorMsg = i18n('SETTINGS_THEMES/ERROR_FILE_TYPE_ERROR');
 									break;
+								// no default
 							}
 						}
 
-						if (!sError && oData.ErrorMessage)
+						if (!errorMsg && data.ErrorMessage)
 						{
-							sError = oData.ErrorMessage;
+							errorMsg = data.ErrorMessage;
 						}
 
-						this.background.error(sError || Translator.i18n('SETTINGS_THEMES/ERROR_UNKNOWN'));
+						this.background.error(errorMsg || i18n('SETTINGS_THEMES/ERROR_UNKNOWN'));
 					}
 
 					return true;
-
-				}, this))
-			;
+				});
 		}
-	};
+	}
+}
 
-	module.exports = ThemesUserSettings;
-
-}());
+export {ThemesUserSettings, ThemesUserSettings as default};

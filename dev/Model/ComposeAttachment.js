@@ -1,42 +1,34 @@
 
-(function () {
+import ko from 'ko';
+import {isUnd, pInt, friendlySize, mimeContentType, getFileExtension} from 'Common/Utils';
 
-	'use strict';
+import {staticIconClass, staticFileType} from 'Model/Attachment';
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
-
-		Utils = require('Common/Utils'),
-
-		AttachmentModel = require('Model/Attachment'),
-
-		AbstractModel = require('Knoin/AbstractModel')
-	;
-
+class ComposeAttachmentModel extends AbstractModel
+{
 	/**
-	 * @constructor
-	 * @param {string} sId
-	 * @param {string} sFileName
-	 * @param {?number=} nSize
-	 * @param {boolean=} bInline
-	 * @param {boolean=} bLinked
-	 * @param {string=} sCID
-	 * @param {string=} sContentLocation
+	 * @param {string} id
+	 * @param {string} fileName
+	 * @param {?number=} size = null
+	 * @param {boolean=} isInline = false
+	 * @param {boolean=} isLinked = false
+	 * @param {string=} CID = ''
+	 * @param {string=} contentLocation = ''
 	 */
-	function ComposeAttachmentModel(sId, sFileName, nSize, bInline, bLinked, sCID, sContentLocation)
+	constructor(id, fileName, size = null, isInline = false, isLinked = false, CID = '', contentLocation = '')
 	{
-		AbstractModel.call(this, 'ComposeAttachmentModel');
+		super('ComposeAttachmentModel');
 
-		this.id = sId;
-		this.isInline = Utils.isUnd(bInline) ? false : !!bInline;
-		this.isLinked = Utils.isUnd(bLinked) ? false : !!bLinked;
-		this.CID = Utils.isUnd(sCID) ? '' : sCID;
-		this.contentLocation = Utils.isUnd(sContentLocation) ? '' : sContentLocation;
+		this.id = id;
+		this.isInline = !!isInline;
+		this.isLinked = !!isLinked;
+		this.CID = CID;
+		this.contentLocation = contentLocation;
 		this.fromMessage = false;
 
-		this.fileName = ko.observable(sFileName);
-		this.size = ko.observable(Utils.isUnd(nSize) ? null : nSize);
+		this.fileName = ko.observable(fileName);
+		this.size = ko.observable(size);
 		this.tempName = ko.observable('');
 
 		this.progress = ko.observable(0);
@@ -46,79 +38,64 @@
 		this.enabled = ko.observable(true);
 		this.complete = ko.observable(false);
 
-		this.progressText = ko.computed(function () {
-			var iP = this.progress();
-			return 0 === iP ? '' : '' + (99 === iP ? 100 : iP) + '%';
-		}, this);
+		this.progressText = ko.computed(() => {
+			const p = this.progress();
+			return 0 === p ? '' : '' + (98 < p ? 100 : p) + '%';
+		});
 
-		this.progressStyle = ko.computed(function () {
-			var iP = this.progress();
-			return 0 === iP ? '' : 'width:' + (99 === iP ? 100 : iP) + '%';
-		}, this);
+		this.progressStyle = ko.computed(() => {
+			const p = this.progress();
+			return 0 === p ? '' : 'width:' + (98 < p ? 100 : p) + '%';
+		});
 
-		this.title = ko.computed(function () {
-			var sError = this.error();
-			return '' !== sError ? sError : this.fileName();
-		}, this);
+		this.title = ko.computed(() => {
+			const error = this.error();
+			return '' !== error ? error : this.fileName();
+		});
 
-		this.friendlySize = ko.computed(function () {
-			var mSize = this.size();
-			return null === mSize ? '' : Utils.friendlySize(this.size());
-		}, this);
+		this.friendlySize = ko.computed(() => {
+			const localSize = this.size();
+			return null === localSize ? '' : friendlySize(localSize);
+		});
 
-		this.mimeType = ko.computed(function () {
-			return Utils.mimeContentType(this.fileName());
-		}, this);
+		this.mimeType = ko.computed(() => mimeContentType(this.fileName()));
+		this.fileExt = ko.computed(() => getFileExtension(this.fileName()));
 
-		this.regDisposables([this.friendlySize]);
+		this.regDisposables([this.progressText, this.progressStyle, this.title, this.friendlySize, this.mimeType, this.fileExt]);
 	}
 
-	_.extend(ComposeAttachmentModel.prototype, AbstractModel.prototype);
-
-	ComposeAttachmentModel.prototype.id = '';
-	ComposeAttachmentModel.prototype.isInline = false;
-	ComposeAttachmentModel.prototype.isLinked = false;
-	ComposeAttachmentModel.prototype.CID = '';
-	ComposeAttachmentModel.prototype.contentLocation = '';
-	ComposeAttachmentModel.prototype.fromMessage = false;
-	ComposeAttachmentModel.prototype.cancel = Utils.emptyFunction;
-
 	/**
-	 * @param {AjaxJsonComposeAttachment} oJsonAttachment
-	 * @return {boolean}
+	 * @param {AjaxJsonComposeAttachment} json
+	 * @returns {boolean}
 	 */
-	ComposeAttachmentModel.prototype.initByUploadJson = function (oJsonAttachment)
-	{
-		var bResult = false;
-		if (oJsonAttachment)
+	initByUploadJson(json) {
+		let bResult = false;
+		if (json)
 		{
-			this.fileName(oJsonAttachment.Name);
-			this.size(Utils.isUnd(oJsonAttachment.Size) ? 0 : Utils.pInt(oJsonAttachment.Size));
-			this.tempName(Utils.isUnd(oJsonAttachment.TempName) ? '' : oJsonAttachment.TempName);
+			this.fileName(json.Name);
+			this.size(isUnd(json.Size) ? 0 : pInt(json.Size));
+			this.tempName(isUnd(json.TempName) ? '' : json.TempName);
 			this.isInline = false;
 
 			bResult = true;
 		}
 
 		return bResult;
-	};
+	}
 
 	/**
-	 * @return {string}
+	 * @returns {string}
 	 */
-	ComposeAttachmentModel.prototype.iconClass = function ()
-	{
-		return AttachmentModel.staticIconClassHelper(this.mimeType())[0];
-	};
+	iconClass() {
+		return staticIconClass(staticFileType(this.fileExt(), this.mimeType()))[0];
+	}
 
 	/**
-	 * @return {string}
+	 * @returns {string}
 	 */
-	ComposeAttachmentModel.prototype.iconText = function ()
-	{
-		return AttachmentModel.staticIconClassHelper(this.mimeType())[1];
-	};
+	iconText() {
+		return staticIconClass(staticFileType(this.fileExt(), this.mimeType()))[1];
+	}
+}
 
-	module.exports = ComposeAttachmentModel;
-
-}());
+export {ComposeAttachmentModel, ComposeAttachmentModel as default};

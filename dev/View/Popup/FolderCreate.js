@@ -1,133 +1,93 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {Notification} from 'Common/Enums';
+import {UNUSED_OPTION_VALUE} from 'Common/Consts';
+import {bMobileDevice} from 'Common/Globals';
+import {trim, defautOptionsAfterRender, folderListOptionsBuilder} from 'Common/Utils';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import FolderStore from 'Stores/User/Folder';
 
-		Enums = require('Common/Enums'),
-		Consts = require('Common/Consts'),
-		Utils = require('Common/Utils'),
-		Translator = require('Common/Translator'),
+import Promises from 'Promises/User/Ajax';
 
-		Data = require('Storage/User/Data'),
-		Remote = require('Storage/User/Remote'),
+import {getApp} from 'Helper/Apps/User';
 
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
+import {popup, command} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function FolderCreateView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsFolderCreate');
-
-		Translator.initOnStartOrLangChange(function () {
-			this.sNoParentText = Translator.i18n('POPUPS_CREATE_FOLDER/SELECT_NO_PARENT');
-		}, this);
+@popup({
+	name: 'View/Popup/FolderCreate',
+	templateID: 'PopupsFolderCreate'
+})
+class FolderCreateView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
 		this.folderName = ko.observable('');
 		this.folderName.focused = ko.observable(false);
 
-		this.selectedParentValue = ko.observable(Consts.Values.UnuseOptionValue);
+		this.selectedParentValue = ko.observable(UNUSED_OPTION_VALUE);
 
-		this.parentFolderSelectList = ko.computed(function () {
+		this.parentFolderSelectList = ko.computed(() => {
 
-			var
-				aTop = [],
-				fDisableCallback = null,
-				fVisibleCallback = null,
-				aList = Data.folderList(),
-				fRenameCallback = function (oItem) {
-					return oItem ? (oItem.isSystemFolder() ? oItem.name() + ' ' + oItem.manageFolderSystemName() : oItem.name()) : '';
-				}
-			;
+			const
+				top = [],
+				list = FolderStore.folderList(),
+				fRenameCallback = (oItem) => (oItem ? (oItem.isSystemFolder() ? oItem.name() + ' ' + oItem.manageFolderSystemName() : oItem.name()) : '');
 
-			aTop.push(['', this.sNoParentText]);
+			top.push(['', '']);
 
-			if ('' !== Data.namespace)
+			let fDisableCallback = null;
+			if ('' !== FolderStore.namespace)
 			{
-				fDisableCallback = function (oItem)
-				{
-					return Data.namespace !== oItem.fullNameRaw.substr(0, Data.namespace.length);
-				};
+				fDisableCallback = (item) => FolderStore.namespace !== item.fullNameRaw.substr(0, FolderStore.namespace.length);
 			}
 
-			return Utils.folderListOptionsBuilder([], aList, [], aTop, null, fDisableCallback, fVisibleCallback, fRenameCallback);
+			return folderListOptionsBuilder([], list, [], top, null, fDisableCallback, null, fRenameCallback);
 
-		}, this);
-
-		// commands
-		this.createFolder = Utils.createCommand(this, function () {
-
-			var
-				sParentFolderName = this.selectedParentValue()
-			;
-
-			if ('' === sParentFolderName && 1 < Data.namespace.length)
-			{
-				sParentFolderName = Data.namespace.substr(0, Data.namespace.length - 1);
-			}
-
-			Data.foldersCreating(true);
-			Remote.folderCreate(function (sResult, oData) {
-
-				Data.foldersCreating(false);
-				if (Enums.StorageResultType.Success === sResult && oData && oData.Result)
-				{
-					require('App/User').folders();
-				}
-				else
-				{
-					Data.folderList.error(
-						oData && oData.ErrorCode ? Translator.getNotification(oData.ErrorCode) : Translator.i18n('NOTIFICATIONS/CANT_CREATE_FOLDER'));
-				}
-
-			},	this.folderName(), sParentFolderName);
-
-			this.cancelCommand();
-
-		}, function () {
-			return this.simpleFolderNameValidation(this.folderName());
 		});
 
-		this.defautOptionsAfterRender = Utils.defautOptionsAfterRender;
-
-		kn.constructorEnd(this);
+		this.defautOptionsAfterRender = defautOptionsAfterRender;
 	}
 
-	kn.extendAsViewModel(['View/Popup/FolderCreate', 'PopupsFolderCreateViewModel'], FolderCreateView);
-	_.extend(FolderCreateView.prototype, AbstractView.prototype);
+	@command((self) => self.simpleFolderNameValidation(self.folderName()))
+	createFolderCommand() {
 
-	FolderCreateView.prototype.sNoParentText = '';
+		let parentFolderName = this.selectedParentValue();
+		if ('' === parentFolderName && 1 < FolderStore.namespace.length)
+		{
+			parentFolderName = FolderStore.namespace.substr(0, FolderStore.namespace.length - 1);
+		}
 
-	FolderCreateView.prototype.simpleFolderNameValidation = function (sName)
-	{
-		return (/^[^\\\/]+$/g).test(Utils.trim(sName));
-	};
+		getApp().foldersPromisesActionHelper(
+			Promises.folderCreate(this.folderName(), parentFolderName, FolderStore.foldersCreating),
+			Notification.CantCreateFolder
+		);
 
-	FolderCreateView.prototype.clearPopup = function ()
-	{
+		this.cancelCommand();
+	}
+
+	simpleFolderNameValidation(sName) {
+		return (/^[^\\\/]+$/g).test(trim(sName));
+	}
+
+	clearPopup() {
 		this.folderName('');
 		this.selectedParentValue('');
 		this.folderName.focused(false);
-	};
+	}
 
-	FolderCreateView.prototype.onShow = function ()
-	{
+	onShow() {
 		this.clearPopup();
-	};
+	}
 
-	FolderCreateView.prototype.onFocus = function ()
-	{
-		this.folderName.focused(true);
-	};
+	onShowWithDelay() {
+		if (!bMobileDevice)
+		{
+			this.folderName.focused(true);
+		}
+	}
+}
 
-	module.exports = FolderCreateView;
-
-}());
+export {FolderCreateView, FolderCreateView as default};

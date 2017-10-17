@@ -1,52 +1,36 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {change} from 'Common/Links';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-		Utils = require('Common/Utils'),
-
-		AbstractModel = require('Knoin/AbstractModel')
-	;
-
+class AccountModel extends AbstractModel
+{
 	/**
-	 * @constructor
-	 *
-	 * @param {string} sEmail
-	 * @param {boolean=} bCanBeDelete = true
-	 * @param {number=} iCount = 0
+	 * @param {string} email
+	 * @param {boolean=} canBeDelete = true
+	 * @param {number=} count = 0
 	 */
-	function AccountModel(sEmail, bCanBeDelete, iCount)
+	constructor(email, canBeDelete = true, count = 0)
 	{
-		AbstractModel.call(this, 'AccountModel');
+		super('AccountModel');
 
-		this.email = sEmail;
+		this.email = email;
 
-		this.count = ko.observable(iCount || 0);
+		this.count = ko.observable(count);
 
 		this.deleteAccess = ko.observable(false);
-		this.canBeDeleted = ko.observable(Utils.isUnd(bCanBeDelete) ? true : !!bCanBeDelete);
+		this.canBeDeleted = ko.observable(!!canBeDelete);
 		this.canBeEdit = this.canBeDeleted;
 	}
 
-	_.extend(AccountModel.prototype, AbstractModel.prototype);
-
 	/**
-	 * @type {string}
+	 * @returns {string}
 	 */
-	AccountModel.prototype.email = '';
+	changeAccountLink() {
+		return change(this.email);
+	}
+}
 
-	/**
-	 * @return {string}
-	 */
-	AccountModel.prototype.changeAccountLink = function ()
-	{
-		return require('Common/Links').change(this.email);
-	};
-
-	module.exports = AccountModel;
-
-}());
+export {AccountModel, AccountModel as default};

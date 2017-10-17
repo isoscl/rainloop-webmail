@@ -1,359 +1,224 @@
 
-(function () {
+import _ from '_';
+import addressparser from 'emailjs-addressparser';
+import {trim, encodeHtml, isNonEmptyArray} from 'Common/Utils';
 
-	'use strict';
-
-	var
-		Utils = require('Common/Utils')
-	;
+class EmailModel
+{
+	email = '';
+	name = '';
+	dkimStatus = '';
+	dkimValue = '';
 
 	/**
-	 * @param {string=} sEmail
-	 * @param {string=} sName
-	 * @param {string=} sDkimStatus
-	 * @param {string=} sDkimValue
-	 *
-	 * @constructor
+	 * @param {string=} email = ''
+	 * @param {string=} name = ''
+	 * @param {string=} dkimStatus = 'none'
+	 * @param {string=} dkimValue = ''
 	 */
-	function EmailModel(sEmail, sName, sDkimStatus, sDkimValue)
+	constructor(email = '', name = '', dkimStatus = 'none', dkimValue = '')
 	{
-		this.email = sEmail || '';
-		this.name = sName || '';
-		this.dkimStatus = sDkimStatus || 'none';
-		this.dkimValue = sDkimValue || '';
+		this.email = email;
+		this.name = name;
+		this.dkimStatus = dkimStatus;
+		this.dkimValue = dkimValue;
 
 		this.clearDuplicateName();
 	}
 
 	/**
 	 * @static
-	 * @param {AjaxJsonEmail} oJsonEmail
-	 * @return {?EmailModel}
+	 * @param {AjaxJsonEmail} json
+	 * @returns {?EmailModel}
 	 */
-	EmailModel.newInstanceFromJson = function (oJsonEmail)
-	{
-		var oEmailModel = new EmailModel();
-		return oEmailModel.initByJson(oJsonEmail) ? oEmailModel : null;
-	};
+	static newInstanceFromJson(json) {
+		const email = new EmailModel();
+		return email.initByJson(json) ? email : null;
+	}
 
 	/**
-	 * @type {string}
+	 * @returns {void}
 	 */
-	EmailModel.prototype.name = '';
-
-	/**
-	 * @type {string}
-	 */
-	EmailModel.prototype.email = '';
-
-	/**
-	 * @type {string}
-	 */
-	EmailModel.prototype.dkimStatus = 'none';
-
-	/**
-	 * @type {string}
-	 */
-	EmailModel.prototype.dkimValue = '';
-
-	EmailModel.prototype.clear = function ()
-	{
+	clear() {
 		this.email = '';
 		this.name = '';
 
 		this.dkimStatus = 'none';
 		this.dkimValue = '';
-	};
+	}
 
 	/**
 	 * @returns {boolean}
 	 */
-	EmailModel.prototype.validate = function ()
-	{
+	validate() {
 		return '' !== this.name || '' !== this.email;
-	};
+	}
 
 	/**
-	 * @param {boolean} bWithoutName = false
-	 * @return {string}
+	 * @param {boolean} withoutName = false
+	 * @returns {string}
 	 */
-	EmailModel.prototype.hash = function (bWithoutName)
-	{
-		return '#' + (bWithoutName ? '' : this.name) + '#' + this.email + '#';
-	};
+	hash(withoutName = false) {
+		return '#' + (withoutName ? '' : this.name) + '#' + this.email + '#';
+	}
 
-	EmailModel.prototype.clearDuplicateName = function ()
-	{
+	/**
+	 * @returns {void}
+	 */
+	clearDuplicateName() {
 		if (this.name === this.email)
 		{
 			this.name = '';
 		}
-	};
+	}
 
 	/**
-	 * @param {string} sQuery
-	 * @return {boolean}
+	 * @param {string} query
+	 * @returns {boolean}
 	 */
-	EmailModel.prototype.search = function (sQuery)
-	{
-		return -1 < (this.name + ' ' + this.email).toLowerCase().indexOf(sQuery.toLowerCase());
-	};
-
-	/**
-	 * @param {string} sString
-	 */
-	EmailModel.prototype.parse = function (sString)
-	{
-		this.clear();
-
-		sString = Utils.trim(sString);
-
-		var
-			mRegex = /(?:"([^"]+)")? ?[<]?(.*?@[^>,]+)>?,? ?/g,
-			mMatch = mRegex.exec(sString)
-		;
-
-		if (mMatch)
-		{
-			this.name = mMatch[1] || '';
-			this.email = mMatch[2] || '';
-
-			this.clearDuplicateName();
-		}
-		else if ((/^[^@]+@[^@]+$/).test(sString))
-		{
-			this.name = '';
-			this.email = sString;
-		}
-	};
+	search(query) {
+		return -1 < (this.name + ' ' + this.email).toLowerCase().indexOf(query.toLowerCase());
+	}
 
 	/**
 	 * @param {AjaxJsonEmail} oJsonEmail
-	 * @return {boolean}
+	 * @returns {boolean}
 	 */
-	EmailModel.prototype.initByJson = function (oJsonEmail)
-	{
-		var bResult = false;
-		if (oJsonEmail && 'Object/Email' === oJsonEmail['@Object'])
+	initByJson(json) {
+		let result = false;
+		if (json && 'Object/Email' === json['@Object'])
 		{
-			this.name = Utils.trim(oJsonEmail.Name);
-			this.email = Utils.trim(oJsonEmail.Email);
-			this.dkimStatus = Utils.trim(oJsonEmail.DkimStatus || '');
-			this.dkimValue = Utils.trim(oJsonEmail.DkimValue || '');
+			this.name = trim(json.Name);
+			this.email = trim(json.Email);
+			this.dkimStatus = trim(json.DkimStatus || '');
+			this.dkimValue = trim(json.DkimValue || '');
 
-			bResult = '' !== this.email;
+			result = '' !== this.email;
 			this.clearDuplicateName();
 		}
 
-		return bResult;
-	};
+		return result;
+	}
 
 	/**
-	 * @param {boolean} bFriendlyView
-	 * @param {boolean=} bWrapWithLink = false
-	 * @param {boolean=} bEncodeHtml = false
-	 * @return {string}
+	 * @param {boolean} friendlyView
+	 * @param {boolean=} wrapWithLink = false
+	 * @param {boolean=} useEncodeHtml = false
+	 * @returns {string}
 	 */
-	EmailModel.prototype.toLine = function (bFriendlyView, bWrapWithLink, bEncodeHtml)
-	{
-		var sResult = '';
+	toLine(friendlyView, wrapWithLink = false, useEncodeHtml = false) {
+		let result = '';
 		if ('' !== this.email)
 		{
-			bWrapWithLink = Utils.isUnd(bWrapWithLink) ? false : !!bWrapWithLink;
-			bEncodeHtml = Utils.isUnd(bEncodeHtml) ? false : !!bEncodeHtml;
-
-			if (bFriendlyView && '' !== this.name)
+			if (friendlyView && '' !== this.name)
 			{
-				sResult = bWrapWithLink ? '<a href="mailto:' + Utils.encodeHtml('"' + this.name + '" <' + this.email + '>') +
-					'" target="_blank" tabindex="-1">' + Utils.encodeHtml(this.name) + '</a>' :
-						(bEncodeHtml ? Utils.encodeHtml(this.name) : this.name);
+				result = wrapWithLink ? '<a href="mailto:' + encodeHtml(this.email) + '?to=' + encodeHtml('"' + this.name + '" <' + this.email + '>') +
+					'" target="_blank" tabindex="-1">' + encodeHtml(this.name) + '</a>' : (useEncodeHtml ? encodeHtml(this.name) : this.name);
+				// result = wrapWithLink ? '<a href="mailto:' + encodeHtml('"' + this.name + '" <' + this.email + '>') +
+				// 	'" target="_blank" tabindex="-1">' + encodeHtml(this.name) + '</a>' : (useEncodeHtml ? encodeHtml(this.name) : this.name);
 			}
 			else
 			{
-				sResult = this.email;
+				result = this.email;
 				if ('' !== this.name)
 				{
-					if (bWrapWithLink)
+					if (wrapWithLink)
 					{
-						sResult = Utils.encodeHtml('"' + this.name + '" <') +
-							'<a href="mailto:' + Utils.encodeHtml('"' + this.name + '" <' + this.email + '>') + '" target="_blank" tabindex="-1">' + Utils.encodeHtml(sResult) + '</a>' + Utils.encodeHtml('>');
+						result = encodeHtml('"' + this.name + '" <') + '<a href="mailto:' +
+							encodeHtml(this.email) + '?to=' + encodeHtml('"' + this.name + '" <' + this.email + '>') +
+							'" target="_blank" tabindex="-1">' +
+							encodeHtml(result) +
+							'</a>' +
+							encodeHtml('>');
+						// result = encodeHtml('"' + this.name + '" <') + '<a href="mailto:' +
+						// 	encodeHtml('"' + this.name + '" <' + this.email + '>') +
+						// 	'" target="_blank" tabindex="-1">' +
+						// 	encodeHtml(result) +
+						// 	'</a>' +
+						// 	encodeHtml('>');
 					}
 					else
 					{
-						sResult = '"' + this.name + '" <' + sResult + '>';
-						if (bEncodeHtml)
+						result = '"' + this.name + '" <' + result + '>';
+						if (useEncodeHtml)
 						{
-							sResult = Utils.encodeHtml(sResult);
+							result = encodeHtml(result);
 						}
 					}
 				}
-				else if (bWrapWithLink)
+				else if (wrapWithLink)
 				{
-					sResult = '<a href="mailto:' + Utils.encodeHtml(this.email) + '" target="_blank" tabindex="-1">' + Utils.encodeHtml(this.email) + '</a>';
+					result = '<a href="mailto:' + encodeHtml(this.email) + '" target="_blank" tabindex="-1">' + encodeHtml(this.email) + '</a>';
 				}
 			}
 		}
 
-		return sResult;
-	};
+		return result;
+	}
+
+	static splitEmailLine(line) {
+		const parsedResult = addressparser.parse(line);
+		if (isNonEmptyArray(parsedResult))
+		{
+			const result = [];
+			let exists = false;
+			parsedResult.forEach((item) => {
+				const address = item.address ? new EmailModel(
+					item.address.replace(/^[<]+(.*)[>]+$/g, '$1'),
+					item.name || ''
+				) : null;
+
+				if (address && address.email) {
+					exists = true;
+				}
+
+				result.push(address ? address.toLine(false) : item.name);
+			});
+
+			return exists ? result : null;
+		}
+
+		return null;
+	}
+
+	static parseEmailLine(line) {
+		const parsedResult = addressparser.parse(line);
+		if (isNonEmptyArray(parsedResult))
+		{
+			return _.compact(parsedResult.map(
+				(item) => (item.address ? new EmailModel(
+					item.address.replace(/^[<]+(.*)[>]+$/g, '$1'),
+					item.name || ''
+				) : null)
+			));
+		}
+
+		return [];
+	}
 
 	/**
-	 * @param {string} $sEmailAddress
-	 * @return {boolean}
+	 * @param {string} emailAddress
+	 * @returns {boolean}
 	 */
-	EmailModel.prototype.mailsoParse = function ($sEmailAddress)
-	{
-		$sEmailAddress = Utils.trim($sEmailAddress);
-		if ('' === $sEmailAddress)
+	parse(emailAddress) {
+		emailAddress = trim(emailAddress);
+		if ('' === emailAddress)
 		{
 			return false;
 		}
 
-		var
-			substr = function (str, start, len) {
-				str += '';
-				var	end = str.length;
-
-				if (start < 0) {
-					start += end;
-				}
-
-				end = typeof len === 'undefined' ? end : (len < 0 ? len + end : len + start);
-
-				return start >= str.length || start < 0 || start > end ? false : str.slice(start, end);
-			},
-
-			substr_replace = function (str, replace, start, length) {
-				if (start < 0) {
-					start = start + str.length;
-				}
-				length = length !== undefined ? length : str.length;
-				if (length < 0) {
-					length = length + str.length - start;
-				}
-				return str.slice(0, start) + replace.substr(0, length) + replace.slice(length) + str.slice(start + length);
-			},
-
-			$sName = '',
-			$sEmail = '',
-			$sComment = '',
-
-			$bInName = false,
-			$bInAddress = false,
-			$bInComment = false,
-
-			$aRegs = null,
-
-			$iStartIndex = 0,
-			$iEndIndex = 0,
-			$iCurrentIndex = 0
-		;
-
-		while ($iCurrentIndex < $sEmailAddress.length)
+		const result = addressparser.parse(emailAddress);
+		if (isNonEmptyArray(result) && result[0])
 		{
-			switch ($sEmailAddress.substr($iCurrentIndex, 1))
-			{
-				case '"':
-					if ((!$bInName) && (!$bInAddress) && (!$bInComment))
-					{
-						$bInName = true;
-						$iStartIndex = $iCurrentIndex;
-					}
-					else if ((!$bInAddress) && (!$bInComment))
-					{
-						$iEndIndex = $iCurrentIndex;
-						$sName = substr($sEmailAddress, $iStartIndex + 1, $iEndIndex - $iStartIndex - 1);
-						$sEmailAddress = substr_replace($sEmailAddress, '', $iStartIndex, $iEndIndex - $iStartIndex + 1);
-						$iEndIndex = 0;
-						$iCurrentIndex = 0;
-						$iStartIndex = 0;
-						$bInName = false;
-					}
-					break;
-				case '<':
-					if ((!$bInName) && (!$bInAddress) && (!$bInComment))
-					{
-						if ($iCurrentIndex > 0 && $sName.length === 0)
-						{
-							$sName = substr($sEmailAddress, 0, $iCurrentIndex);
-						}
+			this.name = result[0].name || '';
+			this.email = result[0].address || '';
+			this.clearDuplicateName();
 
-						$bInAddress = true;
-						$iStartIndex = $iCurrentIndex;
-					}
-					break;
-				case '>':
-					if ($bInAddress)
-					{
-						$iEndIndex = $iCurrentIndex;
-						$sEmail = substr($sEmailAddress, $iStartIndex + 1, $iEndIndex - $iStartIndex - 1);
-						$sEmailAddress = substr_replace($sEmailAddress, '', $iStartIndex, $iEndIndex - $iStartIndex + 1);
-						$iEndIndex = 0;
-						$iCurrentIndex = 0;
-						$iStartIndex = 0;
-						$bInAddress = false;
-					}
-					break;
-				case '(':
-					if ((!$bInName) && (!$bInAddress) && (!$bInComment))
-					{
-						$bInComment = true;
-						$iStartIndex = $iCurrentIndex;
-					}
-					break;
-				case ')':
-					if ($bInComment)
-					{
-						$iEndIndex = $iCurrentIndex;
-						$sComment = substr($sEmailAddress, $iStartIndex + 1, $iEndIndex - $iStartIndex - 1);
-						$sEmailAddress = substr_replace($sEmailAddress, '', $iStartIndex, $iEndIndex - $iStartIndex + 1);
-						$iEndIndex = 0;
-						$iCurrentIndex = 0;
-						$iStartIndex = 0;
-						$bInComment = false;
-					}
-					break;
-				case '\\':
-					$iCurrentIndex++;
-					break;
-			}
-
-			$iCurrentIndex++;
+			return true;
 		}
 
-		if ($sEmail.length === 0)
-		{
-			$aRegs = $sEmailAddress.match(/[^@\s]+@\S+/i);
-			if ($aRegs && $aRegs[0])
-			{
-				$sEmail = $aRegs[0];
-			}
-			else
-			{
-				$sName = $sEmailAddress;
-			}
-		}
+		return false;
+	}
+}
 
-		if ($sEmail.length > 0 && $sName.length === 0 && $sComment.length === 0)
-		{
-			$sName = $sEmailAddress.replace($sEmail, '');
-		}
-
-		$sEmail = Utils.trim($sEmail).replace(/^[<]+/, '').replace(/[>]+$/, '');
-		$sName = Utils.trim($sName).replace(/^["']+/, '').replace(/["']+$/, '');
-		$sComment = Utils.trim($sComment).replace(/^[(]+/, '').replace(/[)]+$/, '');
-
-		// Remove backslash
-		$sName = $sName.replace(/\\\\(.)/g, '$1');
-		$sComment = $sComment.replace(/\\\\(.)/g, '$1');
-
-		this.name = $sName;
-		this.email = $sEmail;
-
-		this.clearDuplicateName();
-		return true;
-	};
-
-	module.exports = EmailModel;
-
-}());
+export {EmailModel, EmailModel as default};

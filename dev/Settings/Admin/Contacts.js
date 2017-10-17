@@ -1,92 +1,85 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {
+	settingsSaveHelperSimpleFunction,
+	defautOptionsAfterRender,
+	inArray, trim, boolToAjax
+} from 'Common/Utils';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
+import {SaveSettingsStep, StorageResultType, Magics} from 'Common/Enums';
+import {i18n} from 'Common/Translator';
+import {settingsGet} from 'Storage/Settings';
+import Remote from 'Remote/Admin/Ajax';
+import {command} from 'Knoin/Knoin';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
+class ContactsAdminSettings
+{
+	constructor() {
+		this.defautOptionsAfterRender = defautOptionsAfterRender;
+		this.enableContacts = ko.observable(!!settingsGet('ContactsEnable'));
+		this.contactsSync = ko.observable(!!settingsGet('ContactsSync'));
 
-		Settings = require('Storage/Settings')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function ContactsAdminSettings()
-	{
-		var
-			Remote = require('Storage/Admin/Remote')
-		;
-
-		this.defautOptionsAfterRender = Utils.defautOptionsAfterRender;
-		this.enableContacts = ko.observable(!!Settings.settingsGet('ContactsEnable'));
-		this.contactsSharing = ko.observable(!!Settings.settingsGet('ContactsSharing'));
-		this.contactsSync = ko.observable(!!Settings.settingsGet('ContactsSync'));
-
-		var
-			aTypes = ['sqlite', 'mysql', 'pgsql'],
-			aSupportedTypes = [],
-			getTypeName = function(sName) {
-				switch (sName)
+		const
+			supportedTypes = [],
+			types = ['sqlite', 'mysql', 'pgsql'],
+			getTypeName = (name) => {
+				switch (name)
 				{
 					case 'sqlite':
-						sName = 'SQLite';
+						name = 'SQLite';
 						break;
 					case 'mysql':
-						sName = 'MySQL';
+						name = 'MySQL';
 						break;
 					case 'pgsql':
-						sName = 'PostgreSQL';
+						name = 'PostgreSQL';
 						break;
+					// no default
 				}
 
-				return sName;
-			}
-		;
+				return name;
+			};
 
-		if (!!Settings.settingsGet('SQLiteIsSupported'))
+		if (settingsGet('SQLiteIsSupported'))
 		{
-			aSupportedTypes.push('sqlite');
+			supportedTypes.push('sqlite');
 		}
-		if (!!Settings.settingsGet('MySqlIsSupported'))
+		if (settingsGet('MySqlIsSupported'))
 		{
-			aSupportedTypes.push('mysql');
+			supportedTypes.push('mysql');
 		}
-		if (!!Settings.settingsGet('PostgreSqlIsSupported'))
+		if (settingsGet('PostgreSqlIsSupported'))
 		{
-			aSupportedTypes.push('pgsql');
+			supportedTypes.push('pgsql');
 		}
 
-		this.contactsSupported = 0 < aSupportedTypes.length;
+		this.contactsSupported = 0 < supportedTypes.length;
 
 		this.contactsTypes = ko.observableArray([]);
-		this.contactsTypesOptions = this.contactsTypes.map(function (sValue) {
-			var bDisabled = -1 === Utils.inArray(sValue, aSupportedTypes);
+		this.contactsTypesOptions = this.contactsTypes.map((value) => {
+			const disabled = -1 === inArray(value, supportedTypes);
 			return {
-				'id': sValue,
-				'name': getTypeName(sValue) + (bDisabled ? ' (not supported)' : ''),
-				'disabled': bDisabled
+				'id': value,
+				'name': getTypeName(value) + (disabled ? ' (' + i18n('HINTS/NOT_SUPPORTED') + ')' : ''),
+				'disabled': disabled
 			};
 		});
 
-		this.contactsTypes(aTypes);
+		this.contactsTypes(types);
 		this.contactsType = ko.observable('');
 
 		this.mainContactsType = ko.computed({
-			'owner': this,
-			'read': this.contactsType,
-			'write': function (sValue) {
-				if (sValue !== this.contactsType())
+			read: this.contactsType,
+			write: (value) => {
+				if (value !== this.contactsType())
 				{
-					if (-1 < Utils.inArray(sValue, aSupportedTypes))
+					if (-1 < inArray(value, supportedTypes))
 					{
-						this.contactsType(sValue);
+						this.contactsType(value);
 					}
-					else if (0 < aSupportedTypes.length)
+					else if (0 < supportedTypes.length)
 					{
 						this.contactsType('');
 					}
@@ -96,67 +89,63 @@
 					this.contactsType.valueHasMutated();
 				}
 			}
-		}).extend({'notify': 'always'});
+		}).extend({notify: 'always'});
 
-		this.contactsType.subscribe(function () {
+		this.contactsType.subscribe(() => {
 			this.testContactsSuccess(false);
 			this.testContactsError(false);
 			this.testContactsErrorMessage('');
-		}, this);
+		});
 
-		this.pdoDsn = ko.observable(Settings.settingsGet('ContactsPdoDsn'));
-		this.pdoUser = ko.observable(Settings.settingsGet('ContactsPdoUser'));
-		this.pdoPassword = ko.observable(Settings.settingsGet('ContactsPdoPassword'));
+		this.pdoDsn = ko.observable(settingsGet('ContactsPdoDsn'));
+		this.pdoUser = ko.observable(settingsGet('ContactsPdoUser'));
+		this.pdoPassword = ko.observable(settingsGet('ContactsPdoPassword'));
 
-		this.pdoDsnTrigger = ko.observable(Enums.SaveSettingsStep.Idle);
-		this.pdoUserTrigger = ko.observable(Enums.SaveSettingsStep.Idle);
-		this.pdoPasswordTrigger = ko.observable(Enums.SaveSettingsStep.Idle);
-		this.contactsTypeTrigger = ko.observable(Enums.SaveSettingsStep.Idle);
+		this.pdoDsnTrigger = ko.observable(SaveSettingsStep.Idle);
+		this.pdoUserTrigger = ko.observable(SaveSettingsStep.Idle);
+		this.pdoPasswordTrigger = ko.observable(SaveSettingsStep.Idle);
+		this.contactsTypeTrigger = ko.observable(SaveSettingsStep.Idle);
 
 		this.testing = ko.observable(false);
 		this.testContactsSuccess = ko.observable(false);
 		this.testContactsError = ko.observable(false);
 		this.testContactsErrorMessage = ko.observable('');
 
-		this.testContactsCommand = Utils.createCommand(this, function () {
-
-			this.testContactsSuccess(false);
-			this.testContactsError(false);
-			this.testContactsErrorMessage('');
-			this.testing(true);
-
-			Remote.testContacts(this.onTestContactsResponse, {
-				'ContactsPdoType': this.contactsType(),
-				'ContactsPdoDsn': this.pdoDsn(),
-				'ContactsPdoUser': this.pdoUser(),
-				'ContactsPdoPassword': this.pdoPassword()
-			});
-
-		}, function () {
-			return '' !== this.pdoDsn() && '' !== this.pdoUser();
-		});
-
-		this.contactsType(Settings.settingsGet('ContactsPdoType'));
+		this.contactsType(settingsGet('ContactsPdoType'));
 
 		this.onTestContactsResponse = _.bind(this.onTestContactsResponse, this);
 	}
 
-	ContactsAdminSettings.prototype.onTestContactsResponse = function (sResult, oData)
-	{
+	@command((self) => '' !== self.pdoDsn() && '' !== self.pdoUser())
+	testContactsCommand() {
+		this.testContactsSuccess(false);
+		this.testContactsError(false);
+		this.testContactsErrorMessage('');
+		this.testing(true);
+
+		Remote.testContacts(this.onTestContactsResponse, {
+			'ContactsPdoType': this.contactsType(),
+			'ContactsPdoDsn': this.pdoDsn(),
+			'ContactsPdoUser': this.pdoUser(),
+			'ContactsPdoPassword': this.pdoPassword()
+		});
+	}
+
+	onTestContactsResponse(result, data) {
 		this.testContactsSuccess(false);
 		this.testContactsError(false);
 		this.testContactsErrorMessage('');
 
-		if (Enums.StorageResultType.Success === sResult && oData && oData.Result && oData.Result.Result)
+		if (StorageResultType.Success === result && data && data.Result && data.Result.Result)
 		{
 			this.testContactsSuccess(true);
 		}
 		else
 		{
 			this.testContactsError(true);
-			if (oData && oData.Result)
+			if (data && data.Result)
 			{
-				this.testContactsErrorMessage(oData.Result.Message || '');
+				this.testContactsErrorMessage(data.Result.Message || '');
 			}
 			else
 			{
@@ -165,78 +154,61 @@
 		}
 
 		this.testing(false);
-	};
+	}
 
-	ContactsAdminSettings.prototype.onShow = function ()
-	{
+	onShow() {
 		this.testContactsSuccess(false);
 		this.testContactsError(false);
 		this.testContactsErrorMessage('');
-	};
+	}
 
-	ContactsAdminSettings.prototype.onBuild = function ()
-	{
-		var
-			self = this,
-			Remote = require('Storage/Admin/Remote')
-		;
+	onBuild() {
+		_.delay(() => {
+			const
+				f1 = settingsSaveHelperSimpleFunction(this.pdoDsnTrigger, this),
+				f3 = settingsSaveHelperSimpleFunction(this.pdoUserTrigger, this),
+				f4 = settingsSaveHelperSimpleFunction(this.pdoPasswordTrigger, this),
+				f5 = settingsSaveHelperSimpleFunction(this.contactsTypeTrigger, this);
 
-		_.delay(function () {
-
-			var
-				f1 = Utils.settingsSaveHelperSimpleFunction(self.pdoDsnTrigger, self),
-				f3 = Utils.settingsSaveHelperSimpleFunction(self.pdoUserTrigger, self),
-				f4 = Utils.settingsSaveHelperSimpleFunction(self.pdoPasswordTrigger, self),
-				f5 = Utils.settingsSaveHelperSimpleFunction(self.contactsTypeTrigger, self)
-			;
-
-			self.enableContacts.subscribe(function (bValue) {
+			this.enableContacts.subscribe((value) => {
 				Remote.saveAdminConfig(null, {
-					'ContactsEnable': bValue ? '1' : '0'
+					'ContactsEnable': boolToAjax(value)
 				});
 			});
 
-			self.contactsSharing.subscribe(function (bValue) {
+			this.contactsSync.subscribe((value) => {
 				Remote.saveAdminConfig(null, {
-					'ContactsSharing': bValue ? '1' : '0'
+					'ContactsSync': boolToAjax(value)
 				});
 			});
 
-			self.contactsSync.subscribe(function (bValue) {
-				Remote.saveAdminConfig(null, {
-					'ContactsSync': bValue ? '1' : '0'
-				});
-			});
-
-			self.contactsType.subscribe(function (sValue) {
+			this.contactsType.subscribe((value) => {
 				Remote.saveAdminConfig(f5, {
-					'ContactsPdoType': sValue
+					'ContactsPdoType': trim(value)
 				});
 			});
 
-			self.pdoDsn.subscribe(function (sValue) {
+			this.pdoDsn.subscribe((value) => {
 				Remote.saveAdminConfig(f1, {
-					'ContactsPdoDsn': Utils.trim(sValue)
+					'ContactsPdoDsn': trim(value)
 				});
 			});
 
-			self.pdoUser.subscribe(function (sValue) {
+			this.pdoUser.subscribe((value) => {
 				Remote.saveAdminConfig(f3, {
-					'ContactsPdoUser': Utils.trim(sValue)
+					'ContactsPdoUser': trim(value)
 				});
 			});
 
-			self.pdoPassword.subscribe(function (sValue) {
+			this.pdoPassword.subscribe((value) => {
 				Remote.saveAdminConfig(f4, {
-					'ContactsPdoPassword': Utils.trim(sValue)
+					'ContactsPdoPassword': trim(value)
 				});
 			});
 
-			self.contactsType(Settings.settingsGet('ContactsPdoType'));
+			this.contactsType(settingsGet('ContactsPdoType'));
+		}, Magics.Time50ms);
+	}
+}
 
-		}, 50);
-	};
-
-	module.exports = ContactsAdminSettings;
-
-}());
+export {ContactsAdminSettings, ContactsAdminSettings as default};

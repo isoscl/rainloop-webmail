@@ -1,32 +1,39 @@
 
-(function () {
+import _ from '_';
+import ko from 'ko';
+import key from 'key';
 
-	'use strict';
+import AppStore from 'Stores/User/App';
+import AccountStore from 'Stores/User/Account';
+import MessageStore from 'Stores/User/Message';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
-		key = require('key'),
+import {Capa, Magics, KeyState} from 'Common/Enums';
+import {trim, isUnd} from 'Common/Utils';
+import {settings} from 'Common/Links';
 
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-		Links = require('Common/Links'),
+import * as Events from 'Common/Events';
+import * as Settings from 'Storage/Settings';
 
-		AccountStore = require('Stores/User/Account'),
+import {getApp} from 'Helper/Apps/User';
 
-		Settings = require('Storage/Settings'),
-		Remote = require('Storage/User/Remote'),
+import {showScreenPopup, setHash} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		AbstractView = require('Knoin/AbstractView')
-	;
+class AbstractSystemDropDownUserView extends AbstractViewNext
+{
+	constructor() {
+		super();
 
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function AbstractSystemDropDownUserView()
-	{
-		AbstractView.call(this, 'Right', 'SystemDropDown');
+		this.logoImg = trim(Settings.settingsGet('UserLogo'));
+		this.logoTitle = trim(Settings.settingsGet('UserLogoTitle'));
+
+		this.mobile = !!Settings.appSettingsGet('mobile');
+		this.mobileDevice = !!Settings.appSettingsGet('mobileDevice');
+
+		this.allowSettings = !!Settings.capa(Capa.Settings);
+		this.allowHelp = !!Settings.capa(Capa.Help);
+
+		this.currentAudio = AppStore.currentAudio;
 
 		this.accountEmail = AccountStore.email;
 
@@ -34,78 +41,77 @@
 		this.accountsUnreadCount = AccountStore.accountsUnreadCount;
 
 		this.accountMenuDropdownTrigger = ko.observable(false);
-		this.capaAdditionalAccounts = ko.observable(Settings.capa(Enums.Capa.AdditionalAccounts));
+		this.capaAdditionalAccounts = ko.observable(Settings.capa(Capa.AdditionalAccounts));
 
-		this.accountClick = _.bind(this.accountClick, this);
+		this.addAccountClick = _.bind(this.addAccountClick, this);
+
+		Events.sub('audio.stop', () => AppStore.currentAudio(''));
+		Events.sub('audio.start', (name) => AppStore.currentAudio(name));
 	}
 
-	_.extend(AbstractSystemDropDownUserView.prototype, AbstractView.prototype);
+	stopPlay() {
+		Events.pub('audio.api.stop');
+	}
 
-	AbstractSystemDropDownUserView.prototype.accountClick = function (oAccount, oEvent)
-	{
-		if (oAccount && oEvent && !Utils.isUnd(oEvent.which) && 1 === oEvent.which)
+	accountClick(account, event) {
+		if (account && event && !isUnd(event.which) && 1 === event.which)
 		{
 			AccountStore.accounts.loading(true);
-
-			_.delay(function () {
-				AccountStore.accounts.loading(false);
-			}, 1000);
+			_.delay(() => AccountStore.accounts.loading(false), Magics.Time1s);
 		}
 
 		return true;
-	};
+	}
 
-	AbstractSystemDropDownUserView.prototype.emailTitle = function ()
-	{
+	emailTitle() {
 		return AccountStore.email();
-	};
+	}
 
-	AbstractSystemDropDownUserView.prototype.settingsClick = function ()
-	{
-		require('Knoin/Knoin').setHash(Links.settings());
-	};
+	settingsClick() {
+		if (Settings.capa(Capa.Settings))
+		{
+			setHash(settings());
+		}
+	}
 
-	AbstractSystemDropDownUserView.prototype.settingsHelp = function ()
+	settingsHelp()
 	{
-		require('Knoin/Knoin').showScreenPopup(require('View/Popup/KeyboardShortcutsHelp'));
-	};
+		if (Settings.capa(Capa.Help))
+		{
+			showScreenPopup(require('View/Popup/KeyboardShortcutsHelp'));
+		}
+	}
 
-	AbstractSystemDropDownUserView.prototype.addAccountClick = function ()
-	{
+	addAccountClick() {
 		if (this.capaAdditionalAccounts())
 		{
-			require('Knoin/Knoin').showScreenPopup(require('View/Popup/Account'));
+			showScreenPopup(require('View/Popup/Account'));
 		}
-	};
+	}
 
-	AbstractSystemDropDownUserView.prototype.logoutClick = function ()
-	{
-		Remote.logout(function () {
-			require('App/User').loginAndLogoutReload(true,
-				Settings.settingsGet('ParentEmail') && 0 < Settings.settingsGet('ParentEmail').length);
-		});
-	};
+	logoutClick() {
+		getApp().logout();
+	}
 
-	AbstractSystemDropDownUserView.prototype.onBuild = function ()
-	{
-		var self = this;
-		key('`', [Enums.KeyState.MessageList, Enums.KeyState.MessageView, Enums.KeyState.Settings], function () {
-			if (self.viewModelVisibility())
+	onBuild() {
+		key('`', [KeyState.MessageList, KeyState.MessageView, KeyState.Settings], () => {
+			if (this.viewModelVisibility())
 			{
-				self.accountMenuDropdownTrigger(true);
+				MessageStore.messageFullScreenMode(false);
+				this.accountMenuDropdownTrigger(true);
 			}
 		});
 
 		// shortcuts help
-		key('shift+/', [Enums.KeyState.MessageList, Enums.KeyState.MessageView, Enums.KeyState.Settings], function () {
-			if (self.viewModelVisibility())
+		key('shift+/', [KeyState.MessageList, KeyState.MessageView, KeyState.Settings], () => {
+			if (this.viewModelVisibility())
 			{
-				require('Knoin/Knoin').showScreenPopup(require('View/Popup/KeyboardShortcutsHelp'));
+				showScreenPopup(require('View/Popup/KeyboardShortcutsHelp'));
 				return false;
 			}
+			return true;
 		});
-	};
+	}
+}
 
-	module.exports = AbstractSystemDropDownUserView;
-
-}());
+export {AbstractSystemDropDownUserView, AbstractSystemDropDownUserView as default};

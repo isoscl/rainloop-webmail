@@ -1,97 +1,77 @@
 
-(function () {
+import window from 'window';
+import {isUnd} from 'Common/Utils';
+import {isStorageSupported} from 'Storage/RainLoop';
+import {CLIENT_SIDE_STORAGE_INDEX_NAME} from 'Common/Consts';
 
-	'use strict';
+class LocalStorageDriver
+{
+	s = null;
 
-	var
-		window = require('window'),
-		JSON = require('JSON'),
-
-		Consts = require('Common/Consts'),
-		Utils = require('Common/Utils')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function LocalStorageDriver()
-	{
+	constructor() {
+		this.s = window.localStorage || null;
 	}
 
 	/**
-	 * @static
-	 * @return {boolean}
+	 * @param {string} key
+	 * @param {*} data
+	 * @returns {boolean}
 	 */
-	LocalStorageDriver.supported = function ()
-	{
-		return !!window.localStorage;
-	};
+	set(key, data) {
+		if (!this.s)
+		{
+			return false;
+		}
+
+		let storageResult = null;
+		try
+		{
+			const storageValue = this.s.getItem(CLIENT_SIDE_STORAGE_INDEX_NAME) || null;
+			storageResult = null === storageValue ? null : window.JSON.parse(storageValue);
+		}
+		catch (e) {} // eslint-disable-line no-empty
+
+		(storageResult || (storageResult = {}))[key] = data;
+
+		try
+		{
+			this.s.setItem(CLIENT_SIDE_STORAGE_INDEX_NAME, window.JSON.stringify(storageResult));
+			return true;
+		}
+		catch (e) {} // eslint-disable-line no-empty
+
+		return false;
+	}
 
 	/**
-	 * @param {string} sKey
-	 * @param {*} mData
-	 * @return {boolean}
+	 * @param {string} key
+	 * @returns {*}
 	 */
-	LocalStorageDriver.prototype.set = function (sKey, mData)
-	{
-		var
-			mStorageValue = window.localStorage[Consts.Values.ClientSideStorageIndexName] || null,
-			bResult = false,
-			mResult = null
-		;
+	get(key) {
+		if (!this.s)
+		{
+			return null;
+		}
 
 		try
 		{
-			mResult = null === mStorageValue ? null : JSON.parse(mStorageValue);
+			const
+				storageValue = this.s.getItem(CLIENT_SIDE_STORAGE_INDEX_NAME) || null,
+				storageResult = null === storageValue ? null : window.JSON.parse(storageValue);
+
+			return (storageResult && !isUnd(storageResult[key])) ? storageResult[key] : null;
 		}
-		catch (oException) {}
+		catch (e) {} // eslint-disable-line no-empty
 
-		if (!mResult)
-		{
-			mResult = {};
-		}
-
-		mResult[sKey] = mData;
-
-		try
-		{
-			window.localStorage[Consts.Values.ClientSideStorageIndexName] = JSON.stringify(mResult);
-
-			bResult = true;
-		}
-		catch (oException) {}
-
-		return bResult;
-	};
+		return null;
+	}
 
 	/**
-	 * @param {string} sKey
-	 * @return {*}
+	 * @returns {boolean}
 	 */
-	LocalStorageDriver.prototype.get = function (sKey)
-	{
-		var
-			mStorageValue = window.localStorage[Consts.Values.ClientSideStorageIndexName] || null,
-			mResult = null
-		;
+	static supported() {
+		return isStorageSupported('localStorage');
+	}
+}
 
-		try
-		{
-			mResult = null === mStorageValue ? null : JSON.parse(mStorageValue);
-			if (mResult && !Utils.isUnd(mResult[sKey]))
-			{
-				mResult = mResult[sKey];
-			}
-			else
-			{
-				mResult = null;
-			}
-		}
-		catch (oException) {}
-
-		return mResult;
-	};
-
-	module.exports = LocalStorageDriver;
-
-}());
+export {LocalStorageDriver, LocalStorageDriver as default};

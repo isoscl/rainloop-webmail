@@ -226,6 +226,9 @@ class AddressBook extends \RainLoop\Providers\AbstractProvider
 				'HomeEmail' => array(PropertyType::EMAIl, 'Home'),
 				'HomeEmail2' => array(PropertyType::EMAIl, 'Home'),
 				'HomeEmail3' => array(PropertyType::EMAIl, 'Home'),
+				'PrimaryEmail' => array(PropertyType::EMAIl, 'Home'),
+				'PrimaryEmail2' => array(PropertyType::EMAIl, 'Home'),
+				'PrimaryEmail3' => array(PropertyType::EMAIl, 'Home'),
 				'EmailAddress' => array(PropertyType::EMAIl, 'Home'),
 				'Email2Address' => array(PropertyType::EMAIl, 'Home'),
 				'Email3Address' => array(PropertyType::EMAIl, 'Home'),
@@ -318,7 +321,7 @@ class AddressBook extends \RainLoop\Providers\AbstractProvider
 	{
 		$iCount = 0;
 
-		if (\class_exists('Sabre\DAV\Client') && $this->IsActive() && \is_string($sVcfData))
+		if (\class_exists('SabreForRainLoop\DAV\Client') && $this->IsActive() && \is_string($sVcfData))
 		{
 			$sVcfData = \trim($sVcfData);
 			if ("\xef\xbb\xbf" === \substr($sVcfData, 0, 3))
@@ -329,7 +332,7 @@ class AddressBook extends \RainLoop\Providers\AbstractProvider
 			$oVCardSplitter = null;
 			try
 			{
-				$oVCardSplitter = new \Sabre\VObject\Splitter\VCard($sVcfData);
+				$oVCardSplitter = new \SabreForRainLoop\VObject\Splitter\VCard($sVcfData);
 			}
 			catch (\Exception $oExc)
 			{
@@ -344,16 +347,16 @@ class AddressBook extends \RainLoop\Providers\AbstractProvider
 
 				while ($oVCard = $oVCardSplitter->getNext())
 				{
-					if ($oVCard instanceof \Sabre\VObject\Component\VCard)
+					if ($oVCard instanceof \SabreForRainLoop\VObject\Component\VCard)
 					{
 						\MailSo\Base\Utils::ResetTimeLimit();
 
 						if (empty($oVCard->UID))
 						{
-							$oVCard->UID = \Sabre\DAV\UUIDUtil::getUUID();
+							$oVCard->UID = \SabreForRainLoop\DAV\UUIDUtil::getUUID();
 						}
 
-						$oContact->PopulateByVCard($oVCard->serialize());
+						$oContact->PopulateByVCard($oVCard->UID, $oVCard->serialize());
 
 						if (0 < \count($oContact->Properties))
 						{

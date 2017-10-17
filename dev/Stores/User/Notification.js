@@ -1,108 +1,92 @@
 
-(function () {
+import window from 'window';
+import ko from 'ko';
 
-	'use strict';
+import {DesktopNotification, Magics} from 'Common/Enums';
+import * as Events from 'Common/Events';
+import Audio from 'Common/Audio';
 
-	var
-		window = require('window'),
-		ko = require('ko'),
-		buzz = require('buzz'),
+import * as Settings from 'Storage/Settings';
 
-		Enums = require('Common/Enums'),
-		Links = require('Common/Links'),
-
-		Settings = require('Storage/Settings')
-	;
-
-	/**
-	 * @constructor
-	 */
-	function NotificationUserStore()
-	{
-		var self = this;
-
-		this.buzz = null;
-
-		this.enableSoundNotification = ko.observable(true);
+class NotificationUserStore
+{
+	constructor() {
+		this.enableSoundNotification = ko.observable(false);
 		this.soundNotificationIsSupported = ko.observable(false);
 
 		this.allowDesktopNotification = ko.observable(false);
 
-		this.desktopNotificationPermissions = ko.computed(function () {
+		this.desktopNotificationPermissions = ko.computed(() => {
 
 			this.allowDesktopNotification();
 
-			var
-				NotificationClass = this.notificationClass(),
-				iResult = Enums.DesktopNotification.NotSupported
-			;
+			let result = DesktopNotification.NotSupported;
 
+			const NotificationClass = this.notificationClass();
 			if (NotificationClass && NotificationClass.permission)
 			{
 				switch (NotificationClass.permission.toLowerCase())
 				{
 					case 'granted':
-						iResult = Enums.DesktopNotification.Allowed;
+						result = DesktopNotification.Allowed;
 						break;
 					case 'denied':
-						iResult = Enums.DesktopNotification.Denied;
+						result = DesktopNotification.Denied;
 						break;
 					case 'default':
-						iResult = Enums.DesktopNotification.NotAllowed;
+						result = DesktopNotification.NotAllowed;
 						break;
+					// no default
 				}
 			}
 			else if (window.webkitNotifications && window.webkitNotifications.checkPermission)
 			{
-				iResult = window.webkitNotifications.checkPermission();
+				result = window.webkitNotifications.checkPermission();
 			}
 
-			return iResult;
+			return result;
 
-		}, this).extend({'notify': 'always'});
+		}).extend({notify: 'always'});
 
 		this.enableDesktopNotification = ko.computed({
-			'owner': this,
-			'read': function () {
-				return this.allowDesktopNotification() &&
-					Enums.DesktopNotification.Allowed === this.desktopNotificationPermissions();
-			},
-			'write': function (bValue) {
-				if (bValue)
+			read: () => this.allowDesktopNotification() && DesktopNotification.Allowed === this.desktopNotificationPermissions(),
+			write: (value) => {
+				if (value)
 				{
-					var
+					const
 						NotificationClass = this.notificationClass(),
-						iPermission = this.desktopNotificationPermissions()
-					;
+						permission = this.desktopNotificationPermissions();
 
-					if (NotificationClass && Enums.DesktopNotification.Allowed === iPermission)
+					if (NotificationClass && DesktopNotification.Allowed === permission)
 					{
 						this.allowDesktopNotification(true);
 					}
-					else if (NotificationClass && Enums.DesktopNotification.NotAllowed === iPermission)
+					else if (NotificationClass && DesktopNotification.NotAllowed === permission)
 					{
-						NotificationClass.requestPermission(function () {
-							self.allowDesktopNotification.valueHasMutated();
-							if (Enums.DesktopNotification.Allowed === self.desktopNotificationPermissions())
+						NotificationClass.requestPermission(() => {
+
+							this.allowDesktopNotification.valueHasMutated();
+
+							if (DesktopNotification.Allowed === this.desktopNotificationPermissions())
 							{
-								if (self.allowDesktopNotification())
+								if (this.allowDesktopNotification())
 								{
-									self.allowDesktopNotification.valueHasMutated();
+									this.allowDesktopNotification.valueHasMutated();
 								}
 								else
 								{
-									self.allowDesktopNotification(true);
+									this.allowDesktopNotification(true);
 								}
 							}
 							else
 							{
-								if (self.allowDesktopNotification())
+								if (this.allowDesktopNotification())
 								{
-									self.allowDesktopNotification(false);
+									this.allowDesktopNotification(false);
 								}
 								else
 								{
-									self.allowDesktopNotification.valueHasMutated();
+									this.allowDesktopNotification.valueHasMutated();
 								}
 							}
 						});
@@ -117,107 +101,107 @@
 					this.allowDesktopNotification(false);
 				}
 			}
-		}).extend({'notify': 'always'});
+		}).extend({notify: 'always'});
 
 		if (!this.enableDesktopNotification.valueHasMutated)
 		{
-			this.enableDesktopNotification.valueHasMutated = function () {
-				self.allowDesktopNotification.valueHasMutated();
+			this.enableDesktopNotification.valueHasMutated = () => {
+				this.allowDesktopNotification.valueHasMutated();
 			};
 		}
 
-		this.computedProperies();
+		this.computers();
 
 		this.initNotificationPlayer();
 	}
 
-	NotificationUserStore.prototype.computedProperies = function ()
-	{
-		this.isDesktopNotificationSupported = ko.computed(function () {
-			return Enums.DesktopNotification.NotSupported !== this.desktopNotificationPermissions();
-		}, this);
+	computers() {
+		this.isDesktopNotificationSupported = ko.computed(
+			() => DesktopNotification.NotSupported !== this.desktopNotificationPermissions()
+		);
 
-		this.isDesktopNotificationDenied = ko.computed(function () {
-			return Enums.DesktopNotification.NotSupported === this.desktopNotificationPermissions() ||
-				Enums.DesktopNotification.Denied === this.desktopNotificationPermissions();
-		}, this);
-	};
+		this.isDesktopNotificationDenied = ko.computed(
+			() => DesktopNotification.NotSupported === this.desktopNotificationPermissions() ||
+				DesktopNotification.Denied === this.desktopNotificationPermissions()
+		);
+	}
 
-	NotificationUserStore.prototype.initNotificationPlayer = function ()
-	{
-		if (buzz && buzz.isSupported() && (buzz.isOGGSupported() || buzz.isMP3Supported()))
+	initNotificationPlayer() {
+		if (Audio && Audio.supportedNotification)
 		{
 			this.soundNotificationIsSupported(true);
-
-			this.buzz = new buzz.sound(Links.sound('new-mail'), {
-				'preload': 'none',
-				'formats': ['mp3', 'ogg']
-			});
 		}
 		else
 		{
 			this.enableSoundNotification(false);
 			this.soundNotificationIsSupported(false);
 		}
-	};
+	}
 
-	NotificationUserStore.prototype.playSoundNotification = function (bSkipSetting)
-	{
-		if (this.buzz && (bSkipSetting ? true : this.enableSoundNotification()))
+	playSoundNotification(skipSetting) {
+		if (Audio && Audio.supportedNotification && (skipSetting ? true : this.enableSoundNotification()))
 		{
-			this.buzz.play();
+			Audio.playNotification();
 		}
-	};
+	}
 
-	NotificationUserStore.prototype.displayDesktopNotification = function (sImageSrc, sTitle, sText)
-	{
+	displayDesktopNotification(imageSrc, title, text, nessageData) {
 		if (this.enableDesktopNotification())
 		{
-			var
+			const
 				NotificationClass = this.notificationClass(),
-				oNotification = NotificationClass ? new NotificationClass(sTitle, {
-					'body': sText,
-					'icon': sImageSrc
-				}) : null
-			;
+				notification = NotificationClass ? new NotificationClass(title, {
+					body: text,
+					icon: imageSrc
+				}) : null;
 
-			if (oNotification)
+			if (notification)
 			{
-				if (oNotification.show)
+				if (notification.show)
 				{
-					oNotification.show();
+					notification.show();
 				}
 
-				window.setTimeout((function (oLocalNotifications) {
-					return function () {
-						if (oLocalNotifications.cancel)
+				if (nessageData)
+				{
+					notification.onclick = () => {
+
+						window.focus();
+
+						if (nessageData.Folder && nessageData.Uid)
 						{
-							oLocalNotifications.cancel();
-						}
-						else if (oLocalNotifications.close)
-						{
-							oLocalNotifications.close();
+							Events.pub('mailbox.message.show', [nessageData.Folder, nessageData.Uid]);
 						}
 					};
-				}(oNotification)), 7000);
+				}
+
+				window.setTimeout((function(localNotifications) {
+					return () => {
+						if (localNotifications.cancel)
+						{
+							localNotifications.cancel();
+						}
+						else if (localNotifications.close)
+						{
+							localNotifications.close();
+						}
+					};
+				}(notification)), Magics.Time7s);
 			}
 		}
-	};
+	}
 
-	NotificationUserStore.prototype.populate = function ()
-	{
+	populate() {
 		this.enableSoundNotification(!!Settings.settingsGet('SoundNotification'));
 		this.enableDesktopNotification(!!Settings.settingsGet('DesktopNotifications'));
-	};
+	}
 
 	/**
-	 * @return {*|null}
+	 * @returns {*|null}
 	 */
-	NotificationUserStore.prototype.notificationClass = function ()
-	{
+	notificationClass() {
 		return window.Notification && window.Notification.requestPermission ? window.Notification : null;
-	};
+	}
+}
 
-	module.exports = new NotificationUserStore();
-
-}());
+export default new NotificationUserStore();

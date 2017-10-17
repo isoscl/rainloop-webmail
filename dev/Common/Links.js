@@ -1,387 +1,449 @@
 
-(function () {
+import window from 'window';
+import {pString, pInt, isUnd, isNormal, trim, encodeURIComponent} from 'Common/Utils';
+import * as Settings from 'Storage/Settings';
 
-	'use strict';
+const
+	ROOT = './',
+	HASH_PREFIX = '#/',
+	SERVER_PREFIX = './?',
+	SUB_QUERY_PREFIX = '&q[]=',
 
-	var
-		window = require('window'),
-		Utils = require('Common/Utils')
-	;
+	VERSION = Settings.appSettingsGet('version'),
 
-	/**
-	 * @constructor
-	 */
-	function Links()
+	WEB_PREFIX = Settings.appSettingsGet('webPath') || '',
+	VERSION_PREFIX = Settings.appSettingsGet('webVersionPath') || 'rainloop/v/' + VERSION + '/',
+	STATIC_PREFIX = VERSION_PREFIX + 'static/',
+
+	ADMIN_HOST_USE = !!Settings.appSettingsGet('adminHostUse'),
+	ADMIN_PATH = Settings.appSettingsGet('adminPath') || 'admin';
+
+let AUTH_PREFIX = Settings.settingsGet('AuthAccountHash') || '0';
+
+/**
+ * @returns {void}
+ */
+export function populateAuthSuffix()
+{
+	AUTH_PREFIX = Settings.settingsGet('AuthAccountHash') || '0';
+}
+
+/**
+ * @returns {string}
+ */
+export function subQueryPrefix()
+{
+	return SUB_QUERY_PREFIX;
+}
+
+/**
+ * @param {string=} startupUrl
+ * @returns {string}
+ */
+export function root(startupUrl = '')
+{
+	return HASH_PREFIX + pString(startupUrl);
+}
+
+/**
+ * @returns {string}
+ */
+export function rootAdmin()
+{
+	return ADMIN_HOST_USE ? ROOT : SERVER_PREFIX + ADMIN_PATH;
+}
+
+/**
+ * @returns {string}
+ */
+export function rootUser()
+{
+	return ROOT;
+}
+
+/**
+ * @param {string} type
+ * @param {string} download
+ * @param {string=} customSpecSuffix
+ * @returns {string}
+ */
+export function attachmentRaw(type, download, customSpecSuffix)
+{
+	customSpecSuffix = isUnd(customSpecSuffix) ? AUTH_PREFIX : customSpecSuffix;
+	return SERVER_PREFIX + '/Raw/' + SUB_QUERY_PREFIX + '/' + customSpecSuffix + '/' + type + '/' + SUB_QUERY_PREFIX + '/' + download;
+}
+
+/**
+ * @param {string} download
+ * @param {string=} customSpecSuffix
+ * @returns {string}
+ */
+export function attachmentDownload(download, customSpecSuffix)
+{
+	return attachmentRaw('Download', download, customSpecSuffix);
+}
+
+/**
+ * @param {string} download
+ * @param {string=} customSpecSuffix
+ * @returns {string}
+ */
+export function attachmentPreview(download, customSpecSuffix)
+{
+	return attachmentRaw('View', download, customSpecSuffix);
+}
+
+/**
+ * @param {string} download
+ * @param {string=} customSpecSuffix
+ * @returns {string}
+ */
+export function attachmentThumbnailPreview(download, customSpecSuffix)
+{
+	return attachmentRaw('ViewThumbnail', download, customSpecSuffix);
+}
+
+/**
+ * @param {string} download
+ * @param {string=} customSpecSuffix
+ * @returns {string}
+ */
+export function attachmentPreviewAsPlain(download, customSpecSuffix)
+{
+	return attachmentRaw('ViewAsPlain', download, customSpecSuffix);
+}
+
+/**
+ * @param {string} download
+ * @param {string=} customSpecSuffix
+ * @returns {string}
+ */
+export function attachmentFramed(download, customSpecSuffix)
+{
+	return attachmentRaw('FramedView', download, customSpecSuffix);
+}
+
+/**
+ * @param {string} type
+ * @returns {string}
+ */
+export function serverRequest(type)
+{
+	return SERVER_PREFIX + '/' + type + '/' + SUB_QUERY_PREFIX + '/' + AUTH_PREFIX + '/';
+}
+
+/**
+ * @returns {string}
+ */
+export function upload()
+{
+	return serverRequest('Upload');
+}
+
+/**
+ * @returns {string}
+ */
+export function uploadContacts()
+{
+	return serverRequest('UploadContacts');
+}
+
+/**
+ * @returns {string}
+ */
+export function uploadBackground()
+{
+	return serverRequest('UploadBackground');
+}
+
+/**
+ * @returns {string}
+ */
+export function append()
+{
+	return serverRequest('Append');
+}
+
+/**
+ * @param {string} email
+ * @returns {string}
+ */
+export function change(email)
+{
+	return serverRequest('Change') + encodeURIComponent(email) + '/';
+}
+
+/**
+ * @param {string} add
+ * @returns {string}
+ */
+export function ajax(add)
+{
+	return serverRequest('Ajax') + add;
+}
+
+/**
+ * @param {string} requestHash
+ * @returns {string}
+ */
+export function messageViewLink(requestHash)
+{
+	return SERVER_PREFIX + '/Raw/' + SUB_QUERY_PREFIX + '/' + AUTH_PREFIX + '/ViewAsPlain/' + SUB_QUERY_PREFIX + '/' + requestHash;
+}
+
+/**
+ * @param {string} requestHash
+ * @returns {string}
+ */
+export function messageDownloadLink(requestHash)
+{
+	return SERVER_PREFIX + '/Raw/' + SUB_QUERY_PREFIX + '/' + AUTH_PREFIX + '/Download/' + SUB_QUERY_PREFIX + '/' + requestHash;
+}
+
+/**
+ * @param {string} email
+ * @returns {string}
+ */
+export function avatarLink(email)
+{
+	return SERVER_PREFIX + '/Raw/0/Avatar/' + encodeURIComponent(email) + '/';
+}
+
+/**
+ * @param {string} hash
+ * @returns {string}
+ */
+export function publicLink(hash)
+{
+	return SERVER_PREFIX + '/Raw/0/Public/' + hash + '/';
+}
+
+/**
+ * @param {string} hash
+ * @returns {string}
+ */
+export function userBackground(hash)
+{
+	return SERVER_PREFIX + '/Raw/' + SUB_QUERY_PREFIX + '/' + AUTH_PREFIX + '/UserBackground/' + SUB_QUERY_PREFIX + '/' + hash;
+}
+
+/**
+ * @returns {string}
+ */
+export function phpInfo()
+{
+	return SERVER_PREFIX + '/Info';
+}
+
+/**
+ * @param {string} lang
+ * @param {boolean} isAdmin
+ * @returns {string}
+ */
+export function langLink(lang, isAdmin)
+{
+	return SERVER_PREFIX + '/Lang/0/' + (isAdmin ? 'Admin' : 'App') + '/' + window.encodeURI(lang) + '/' + VERSION + '/';
+}
+
+/**
+ * @returns {string}
+ */
+export function exportContactsVcf()
+{
+	return SERVER_PREFIX + '/Raw/' + SUB_QUERY_PREFIX + '/' + AUTH_PREFIX + '/ContactsVcf/';
+}
+
+/**
+ * @returns {string}
+ */
+export function exportContactsCsv()
+{
+	return SERVER_PREFIX + '/Raw/' + SUB_QUERY_PREFIX + '/' + AUTH_PREFIX + '/ContactsCsv/';
+}
+
+/**
+ * @param {boolean} xauth = false
+ * @returns {string}
+ */
+export function socialGoogle(xauth = false)
+{
+	return SERVER_PREFIX + 'SocialGoogle' +
+		('' !== AUTH_PREFIX ? '/' + SUB_QUERY_PREFIX + '/' + AUTH_PREFIX + '/' : '') + (xauth ? '&xauth=1' : '');
+}
+
+/**
+ * @returns {string}
+ */
+export function socialTwitter()
+{
+	return SERVER_PREFIX + 'SocialTwitter' +
+		('' !== AUTH_PREFIX ? '/' + SUB_QUERY_PREFIX + '/' + AUTH_PREFIX + '/' : '');
+}
+
+/**
+ * @returns {string}
+ */
+export function socialFacebook()
+{
+	return SERVER_PREFIX + 'SocialFacebook' +
+		('' !== AUTH_PREFIX ? '/' + SUB_QUERY_PREFIX + '/' + AUTH_PREFIX + '/' : '');
+}
+
+/**
+ * @param {string} path
+ * @returns {string}
+ */
+export function staticPrefix(path)
+{
+	return STATIC_PREFIX + path;
+}
+
+/**
+ * @returns {string}
+ */
+export function emptyContactPic()
+{
+	return staticPrefix('css/images/empty-contact.png');
+}
+
+/**
+ * @param {string} fileName
+ * @returns {string}
+ */
+export function sound(fileName)
+{
+	return staticPrefix('sounds/' + fileName);
+}
+
+/**
+ * @returns {string}
+ */
+export function notificationMailIcon()
+{
+	return staticPrefix('css/images/icom-message-notification.png');
+}
+
+/**
+ * @returns {string}
+ */
+export function openPgpJs()
+{
+	return staticPrefix('js/min/openpgp.min.js');
+}
+
+/**
+ * @returns {string}
+ */
+export function openPgpWorkerJs()
+{
+	return staticPrefix('js/min/openpgp.worker.min.js');
+}
+
+/**
+ * @returns {string}
+ */
+export function openPgpWorkerPath()
+{
+	return staticPrefix('js/min/');
+}
+
+/**
+ * @param {string} theme
+ * @returns {string}
+ */
+export function themePreviewLink(theme)
+{
+	let prefix = VERSION_PREFIX;
+	if ('@custom' === theme.substr(-7))
 	{
-		var Settings = require('Storage/Settings');
-
-		this.sBase = '#/';
-		this.sServer = './?';
-		this.sSubQuery = '&s=/';
-		this.sSubSubQuery = '&ss=/';
-		this.sVersion = Settings.settingsGet('Version');
-		this.sSpecSuffix = Settings.settingsGet('AuthAccountHash') || '0';
-		this.sWebPrefix = Settings.settingsGet('WebPath') || '';
-		this.sVersionPrefix = Settings.settingsGet('WebVersionPath') || 'rainloop/v/' + this.sVersion + '/';
-		this.sStaticPrefix = this.sVersionPrefix + 'static/';
+		theme = trim(theme.substring(0, theme.length - 7));
+		prefix = WEB_PREFIX;
 	}
 
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.root = function ()
-	{
-		return this.sBase;
-	};
+	return prefix + 'themes/' + window.encodeURI(theme) + '/images/preview.png';
+}
 
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.rootAdmin = function ()
-	{
-		return this.sServer + '/Admin/';
-	};
+/**
+ * @param {string} inboxFolderName = 'INBOX'
+ * @returns {string}
+ */
+export function inbox(inboxFolderName = 'INBOX')
+{
+	return HASH_PREFIX + 'mailbox/' + inboxFolderName;
+}
 
-	/**
-	 * @param {string} sDownload
-	 * @return {string}
-	 */
-	Links.prototype.attachmentDownload = function (sDownload)
-	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/Download/' + this.sSubSubQuery + sDownload;
-	};
+/**
+ * @param {string=} screenName = ''
+ * @returns {string}
+ */
+export function settings(screenName = '')
+{
+	return HASH_PREFIX + 'settings' + (screenName ? '/' + screenName : '');
+}
 
-	/**
-	 * @param {string} sDownload
-	 * @return {string}
-	 */
-	Links.prototype.attachmentPreview = function (sDownload)
-	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/View/' + this.sSubSubQuery + sDownload;
-	};
+/**
+ * @returns {string}
+ */
+export function about()
+{
+	return HASH_PREFIX + 'about';
+}
 
-	/**
-	 * @param {string} sDownload
-	 * @return {string}
-	 */
-	Links.prototype.attachmentThumbnailPreview = function (sDownload)
+/**
+ * @param {string} screenName
+ * @returns {string}
+ */
+export function admin(screenName)
+{
+	let result = HASH_PREFIX;
+	switch (screenName)
 	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/ViewThumbnail/' + this.sSubSubQuery + sDownload;
-	};
-
-	/**
-	 * @param {string} sDownload
-	 * @return {string}
-	 */
-	Links.prototype.attachmentPreviewAsPlain = function (sDownload)
-	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/ViewAsPlain/' + this.sSubSubQuery + sDownload;
-	};
-
-	/**
-	 * @param {string} sDownload
-	 * @return {string}
-	 */
-	Links.prototype.attachmentFramed = function (sDownload)
-	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/FramedView/' + this.sSubSubQuery + sDownload;
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.upload = function ()
-	{
-		return this.sServer + '/Upload/' + this.sSubQuery + this.sSpecSuffix + '/';
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.uploadContacts = function ()
-	{
-		return this.sServer + '/UploadContacts/' + this.sSubQuery + this.sSpecSuffix + '/';
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.uploadBackground = function ()
-	{
-		return this.sServer + '/UploadBackground/' + this.sSubQuery + this.sSpecSuffix + '/';
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.append = function ()
-	{
-		return this.sServer + '/Append/' + this.sSubQuery + this.sSpecSuffix + '/';
-	};
-
-	/**
-	 * @param {string} sEmail
-	 * @return {string}
-	 */
-	Links.prototype.change = function (sEmail)
-	{
-		return this.sServer + '/Change/' + this.sSubQuery + this.sSpecSuffix + '/' + Utils.encodeURIComponent(sEmail) + '/';
-	};
-
-	/**
-	 * @param {string=} sAdd
-	 * @return {string}
-	 */
-	Links.prototype.ajax = function (sAdd)
-	{
-		return this.sServer + '/Ajax/' + this.sSubQuery + this.sSpecSuffix + '/' + sAdd;
-	};
-
-	/**
-	 * @param {string} sRequestHash
-	 * @return {string}
-	 */
-	Links.prototype.messageViewLink = function (sRequestHash)
-	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/ViewAsPlain/' + this.sSubSubQuery + sRequestHash;
-	};
-
-	/**
-	 * @param {string} sRequestHash
-	 * @return {string}
-	 */
-	Links.prototype.messageDownloadLink = function (sRequestHash)
-	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/Download/' + this.sSubSubQuery + sRequestHash;
-	};
-
-	/**
-	 * @param {string} sEmail
-	 * @return {string}
-	 */
-	Links.prototype.avatarLink = function (sEmail)
-	{
-		return this.sServer + '/Raw/0/Avatar/' + Utils.encodeURIComponent(sEmail) + '/';
-	};
-
-	/**
-	 * @param {string} sHash
-	 * @return {string}
-	 */
-	Links.prototype.publicLink = function (sHash)
-	{
-		return this.sServer + '/Raw/0/Public/' + sHash + '/';
-	};
-
-	/**
-	 * @param {string} sHash
-	 * @return {string}
-	 */
-	Links.prototype.userBackground = function (sHash)
-	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/UserBackground/' +
-			this.sSubSubQuery + sHash;
-	};
-
-	/**
-	 * @param {string} sInboxFolderName = 'INBOX'
-	 * @return {string}
-	 */
-	Links.prototype.inbox = function (sInboxFolderName)
-	{
-		sInboxFolderName = Utils.isUnd(sInboxFolderName) ? 'INBOX' : sInboxFolderName;
-		return this.sBase + 'mailbox/' + sInboxFolderName;
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.messagePreview = function ()
-	{
-		return this.sBase + 'mailbox/message-preview';
-	};
-
-	/**
-	 * @param {string=} sScreenName
-	 * @return {string}
-	 */
-	Links.prototype.settings = function (sScreenName)
-	{
-		var sResult = this.sBase + 'settings';
-		if (!Utils.isUnd(sScreenName) && '' !== sScreenName)
-		{
-			sResult += '/' + sScreenName;
-		}
-
-		return sResult;
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.about = function ()
-	{
-		return this.sBase + 'about';
-	};
-
-	/**
-	 * @param {string} sScreenName
-	 * @return {string}
-	 */
-	Links.prototype.admin = function (sScreenName)
-	{
-		var sResult = this.sBase;
-		switch (sScreenName) {
 		case 'AdminDomains':
-			sResult += 'domains';
+			result += 'domains';
 			break;
 		case 'AdminSecurity':
-			sResult += 'security';
+			result += 'security';
 			break;
 		case 'AdminLicensing':
-			sResult += 'licensing';
+			result += 'licensing';
 			break;
-		}
+		// no default
+	}
 
-		return sResult;
-	};
+	return result;
+}
 
-	/**
-	 * @param {string} sFolder
-	 * @param {number=} iPage = 1
-	 * @param {string=} sSearch = ''
-	 * @return {string}
-	 */
-	Links.prototype.mailBox = function (sFolder, iPage, sSearch)
+/**
+ * @param {string} folder
+ * @param {number=} page = 1
+ * @param {string=} search = ''
+ * @param {string=} threadUid = ''
+ * @returns {string}
+ */
+export function mailBox(folder, page = 1, search = '', threadUid = '')
+{
+	page = isNormal(page) ? pInt(page) : 1;
+	search = pString(search);
+
+	let result = HASH_PREFIX + 'mailbox/';
+
+	if ('' !== folder)
 	{
-		iPage = Utils.isNormal(iPage) ? Utils.pInt(iPage) : 1;
-		sSearch = Utils.pString(sSearch);
+		const resultThreadUid = pInt(threadUid);
+		result += window.encodeURI(folder) + (0 < resultThreadUid ? '~' + resultThreadUid : '');
+	}
 
-		var sResult = this.sBase + 'mailbox/';
-		if ('' !== sFolder)
-		{
-			sResult += encodeURI(sFolder);
-		}
-		if (1 < iPage)
-		{
-			sResult = sResult.replace(/[\/]+$/, '');
-			sResult += '/p' + iPage;
-		}
-		if ('' !== sSearch)
-		{
-			sResult = sResult.replace(/[\/]+$/, '');
-			sResult += '/' + encodeURI(sSearch);
-		}
-
-		return sResult;
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.phpInfo = function ()
+	if (1 < page)
 	{
-		return this.sServer + 'Info';
-	};
+		result = result.replace(/[\/]+$/, '');
+		result += '/p' + page;
+	}
 
-	/**
-	 * @param {string} sLang
-	 * @return {string}
-	 */
-	Links.prototype.langLink = function (sLang)
+	if ('' !== search)
 	{
-		return this.sServer + '/Lang/0/' + encodeURI(sLang) + '/' + this.sVersion + '/';
-	};
+		result = result.replace(/[\/]+$/, '');
+		result += '/' + window.encodeURI(search);
+	}
 
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.exportContactsVcf = function ()
-	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/ContactsVcf/';
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.exportContactsCsv = function ()
-	{
-		return this.sServer + '/Raw/' + this.sSubQuery + this.sSpecSuffix + '/ContactsCsv/';
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.emptyContactPic = function ()
-	{
-		return this.sStaticPrefix + 'css/images/empty-contact.png';
-	};
-
-	/**
-	 * @param {string} sFileName
-	 * @return {string}
-	 */
-	Links.prototype.sound = function (sFileName)
-	{
-		return  this.sStaticPrefix + 'sounds/' + sFileName;
-	};
-
-	/**
-	 * @param {string} sTheme
-	 * @return {string}
-	 */
-	Links.prototype.themePreviewLink = function (sTheme)
-	{
-		var sPrefix = this.sVersionPrefix;
-		if ('@custom' === sTheme.substr(-7))
-		{
-			sTheme = Utils.trim(sTheme.substring(0, sTheme.length - 7));
-			sPrefix = this.sWebPrefix;
-		}
-
-		return sPrefix + 'themes/' + window.encodeURI(sTheme) + '/images/preview.png';
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.notificationMailIcon = function ()
-	{
-		return  this.sStaticPrefix + 'css/images/icom-message-notification.png';
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.openPgpJs = function ()
-	{
-		return  this.sStaticPrefix + 'js/min/openpgp.js';
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.socialGoogle = function ()
-	{
-		return this.sServer + 'SocialGoogle' + ('' !== this.sSpecSuffix ? '/' + this.sSubQuery + this.sSpecSuffix + '/' : '');
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.socialTwitter = function ()
-	{
-		return this.sServer + 'SocialTwitter' + ('' !== this.sSpecSuffix ? '/' + this.sSubQuery + this.sSpecSuffix + '/' : '');
-	};
-
-	/**
-	 * @return {string}
-	 */
-	Links.prototype.socialFacebook = function ()
-	{
-		return this.sServer + 'SocialFacebook' + ('' !== this.sSpecSuffix ? '/' + this.sSubQuery + this.sSpecSuffix + '/' : '');
-	};
-
-	module.exports = new Links();
-
-}());
+	return result;
+}

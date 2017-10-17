@@ -1,38 +1,31 @@
 
-(function () {
+import {i18n} from 'Common/Translator';
+import {defautOptionsAfterRender} from 'Common/Utils';
+import {componentExportHelper} from 'Component/Abstract';
+import {AbstractInput} from 'Component/AbstractInput';
 
-	'use strict';
-
-	var
-		_ = require('_'),
-
-		Utils = require('Common/Utils'),
-
-		AbstractInput = require('Component/AbstractInput')
-	;
-
+class SelectComponent extends AbstractInput
+{
 	/**
-	 * @constructor
-	 *
-	 * @param {Object} oParams
-	 *
-	 * @extends AbstractInput
+	 * @param {Object} params
 	 */
-	function SelectComponent(oParams)
-	{
-		AbstractInput.call(this, oParams);
+	constructor(params) {
 
-		this.options = oParams.options || '';
+		super(params);
 
-		this.optionsText = oParams.optionsText || null;
-		this.optionsValue = oParams.optionsValue || null;
+		this.options = params.options || '';
 
-		this.defautOptionsAfterRender = Utils.defautOptionsAfterRender;
+		this.optionsText = params.optionsText || null;
+		this.optionsValue = params.optionsValue || null;
+		this.optionsCaption = params.optionsCaption || null;
+
+		if (this.optionsCaption)
+		{
+			this.optionsCaption = i18n(this.optionsCaption);
+		}
+
+		this.defautOptionsAfterRender = defautOptionsAfterRender;
 	}
+}
 
-	_.extend(SelectComponent.prototype, AbstractInput.prototype);
-
-	module.exports = AbstractInput.componentExportHelper(
-		SelectComponent, 'SelectComponent');
-
-}());
+export default componentExportHelper(SelectComponent, 'SelectComponent');

@@ -1,26 +1,20 @@
 
-(function () {
+import ko from 'ko';
 
-	'use strict';
+import {AbstractModel} from 'Knoin/AbstractModel';
 
-	var
-		_ = require('_'),
-		ko = require('ko'),
-
-		AbstractModel = require('Knoin/AbstractModel')
-	;
-
+class IdentityModel extends AbstractModel
+{
 	/**
-	 * @param {string} sId
-	 * @param {string} sEmail
-	 * @constructor
+	 * @param {string} id
+	 * @param {string} email
 	 */
-	function IdentityModel(sId, sEmail)
+	constructor(id, email)
 	{
-		AbstractModel.call(this, 'IdentityModel');
+		super('IdentityModel');
 
-		this.id = ko.observable(sId);
-		this.email = ko.observable(sEmail);
+		this.id = ko.observable(id || '');
+		this.email = ko.observable(email);
 		this.name = ko.observable('');
 
 		this.replyTo = ko.observable('');
@@ -30,23 +24,19 @@
 		this.signatureInsertBefore = ko.observable(false);
 
 		this.deleteAccess = ko.observable(false);
-		this.canBeDeleted = ko.computed(function () {
-			return '' !== this.id();
-		}, this);
+		this.canBeDeleted = ko.computed(() => '' !== this.id());
 	}
 
-	_.extend(IdentityModel.prototype, AbstractModel.prototype);
+	/**
+	 * @returns {string}
+	 */
+	formattedName() {
+		const
+			name = this.name(),
+			email = this.email();
 
-	IdentityModel.prototype.formattedName = function ()
-	{
-		var
-			sName = this.name(),
-			sEmail = this.email()
-		;
+		return '' !== name ? name + ' (' + email + ')' : email;
+	}
+}
 
-		return ('' !== sName) ? sName + ' (' + sEmail + ')' : sEmail;
-	};
-
-	module.exports = IdentityModel;
-
-}());
+export {IdentityModel, IdentityModel as default};

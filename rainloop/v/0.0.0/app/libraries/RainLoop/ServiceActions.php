@@ -79,6 +79,14 @@ class ServiceActions
 	}
 
 	/**
+	 * @return \RainLoop\Providers\Settings
+	 */
+	public function SettingsProvider()
+	{
+		return $this->oActions->SettingsProvider();
+	}
+
+	/**
 	 * @param array $aPaths
 	 *
 	 * @return \RainLoop\ServiceActions
@@ -182,9 +190,21 @@ class ServiceActions
 			$aResponseItem = $this->oActions->ExceptionResponse(
 				empty($sAction) ? 'Unknown' : $sAction, $oException);
 
-			if (\is_array($aResponseItem) && 'Folders' === $sAction && $oException instanceof \RainLoop\Exceptions\ClientException)
+			if (\is_array($aResponseItem) && $oException instanceof \RainLoop\Exceptions\ClientException)
 			{
-				$aResponseItem['ClearAuth'] = true;
+				if ('Folders' === $sAction)
+				{
+					$aResponseItem['ClearAuth'] = true;
+				}
+
+				if ($oException->getLogoutOnException())
+				{
+					$aResponseItem['Logout'] = true;
+					if ($oException->getAdditionalMessage())
+					{
+						$this->oActions->SetSpecLogoutCustomMgsWithDeletion($oException->getAdditionalMessage());
+					}
+				}
 			}
 		}
 
@@ -226,15 +246,20 @@ class ServiceActions
 	 */
 	public function ServiceOwnCloudAuth()
 	{
+		$this->oHttp->ServerNoCache();
+
 		if (!\RainLoop\Utils::IsOwnCloud() ||
-			empty($_ENV['___rainloop_owncloud_email']) &&
-			!isset($_ENV['___rainloop_owncloud_password'])
+			!isset($_ENV['___rainloop_owncloud_email']) ||
+			!isset($_ENV['___rainloop_owncloud_password']) ||
+			empty($_ENV['___rainloop_owncloud_email'])
 		)
 		{
 			$this->oActions->SetAuthLogoutToken();
 			$this->oActions->Location('./');
 			return '';
 		}
+
+		$bLogout = true;
 
 		$sEmail = $_ENV['___rainloop_owncloud_email'];
 		$sPassword = $_ENV['___rainloop_owncloud_password'];
@@ -426,7 +451,7 @@ class ServiceActions
 		{
 			$this->oActions->verifyCacheByKey($sData);
 
-			$aData = \RainLoop\Utils::DecodeKeyValues($sData);
+			$aData = \RainLoop\Utils::DecodeKeyValuesQ($sData);
 			if (\is_array($aData) && !empty($aData['Token']) && !empty($aData['Url']) && $aData['Token'] === \RainLoop\Utils::GetConnectionToken())
 			{
 				$iCode = 404;
@@ -472,6 +497,8 @@ class ServiceActions
 				$sMethodName = 'Raw'.$sAction;
 				if (\method_exists($this->oActions, $sMethodName))
 				{
+					@\header('X-Raw-Action: '.$sMethodName, true);
+
 					$sRawError = '';
 					$this->oActions->SetActionParams(array(
 						'RawKey' => empty($this->aPaths[3]) ? '' : $this->aPaths[3],
@@ -535,9 +562,10 @@ class ServiceActions
 		$sResult = '';
 		@\header('Content-Type: application/javascript; charset=utf-8');
 
-		if (!empty($this->aPaths[2]))
+		if (!empty($this->aPaths[3]))
 		{
-			$sLanguage = $this->oActions->ValidateLanguage($this->aPaths[2]);
+			$bAdmim =  'Admin' === (isset($this->aPaths[2]) ? (string) $this->aPaths[2] : 'App');
+			$sLanguage = $this->oActions->ValidateLanguage($this->aPaths[3], '', $bAdmim);
 
 			$bCacheEnabled = $this->Config()->Get('labs', 'cache_system_data', true);
 			if (!empty($sLanguage) && $bCacheEnabled)
@@ -548,13 +576,15 @@ class ServiceActions
 			$sCacheFileName = '';
 			if ($bCacheEnabled)
 			{
-				$sCacheFileName = \RainLoop\KeyPathHelper::LangCache($sLanguage, $this->oActions->Plugins()->Hash());
+				$sCacheFileName = \RainLoop\KeyPathHelper::LangCache(
+					$sLanguage, $bAdmim, $this->oActions->Plugins()->Hash());
+
 				$sResult = $this->Cacher()->Get($sCacheFileName);
 			}
 
 			if (0 === \strlen($sResult))
 			{
-				$sResult = $this->compileLanguage($sLanguage, false);
+				$sResult = $this->compileLanguage($sLanguage, $bAdmim, false);
 				if ($bCacheEnabled && 0 < \strlen($sCacheFileName))
 				{
 					$this->Cacher()->Set($sCacheFileName, $sResult);
@@ -701,7 +731,7 @@ class ServiceActions
 					include_once APP_VERSION_ROOT_PATH.'app/libraries/lessphp/ctype.php';
 					include_once APP_VERSION_ROOT_PATH.'app/libraries/lessphp/lessc.inc.php';
 
-					$oLess = new \lessc();
+					$oLess = new \RainLoopVendor\lessc();
 					$oLess->setFormatter('compressed');
 
 					$aResult = array();
@@ -760,7 +790,8 @@ class ServiceActions
 	 */
 	public function ServiceSocialGoogle()
 	{
-		return $this->oActions->Social()->GooglePopupService();
+		$bXAuth = '1' === (string) $this->oHttp->GetQuery('xauth', '0');
+		return $this->oActions->Social()->GooglePopupService($bXAuth);
 	}
 
 	/**
@@ -782,17 +813,37 @@ class ServiceActions
 	/**
 	 * @return string
 	 */
-	public function ServiceAppData()
+	public function ServiceAppData($sAdd = '')
 	{
-		return $this->localAppData(false);
+		return $this->localAppData(false, $sAdd);
 	}
 
 	/**
 	 * @return string
 	 */
-	public function ServiceAdminAppData()
+	public function ServiceAdminAppData($sAdd = '')
 	{
-		return $this->localAppData(true);
+		return $this->localAppData(true, $sAdd);
+	}
+
+	/**
+	 * @return string
+	 */
+	public function ServiceMobileVersion()
+	{
+		\RainLoop\Utils::SetCookie(\RainLoop\Actions::RL_MOBILE_TYPE, 'mobile');
+		$this->oActions->Location('./');
+		return '';
+	}
+
+	/**
+	 * @return string
+	 */
+	public function ServiceDesktopVersion()
+	{
+		\RainLoop\Utils::SetCookie(\RainLoop\Actions::RL_MOBILE_TYPE, 'desktop');
+		$this->oActions->Location('./');
+		return '';
 	}
 
 	/**
@@ -833,6 +884,8 @@ class ServiceActions
 	 */
 	public function ServiceMailto()
 	{
+		$this->oHttp->ServerNoCache();
+
 		$sTo = \trim($this->oHttp->GetQuery('to', ''));
 		if (!empty($sTo) && \preg_match('/^mailto:/i', $sTo))
 		{
@@ -852,6 +905,8 @@ class ServiceActions
 	 */
 	public function ServicePing()
 	{
+		$this->oHttp->ServerNoCache();
+
 		@\header('Content-Type: text/plain; charset=utf-8');
 		$this->oActions->Logger()->Write('Pong', \MailSo\Log\Enumerations\Type::INFO, 'PING');
 		return 'Pong';
@@ -862,6 +917,8 @@ class ServiceActions
 	 */
 	public function ServiceInfo()
 	{
+		$this->oHttp->ServerNoCache();
+
 		if ($this->oActions->IsAdminLoggined(false))
 		{
 			@\header('Content-Type: text/html; charset=utf-8');
@@ -874,6 +931,8 @@ class ServiceActions
 	 */
 	public function ServiceSso()
 	{
+		$this->oHttp->ServerNoCache();
+
 		$oException = null;
 		$oAccount = null;
 		$bLogout = true;
@@ -886,7 +945,7 @@ class ServiceActions
 			$sSsoSubData = $this->Cacher()->Get(\RainLoop\KeyPathHelper::SsoCacherKey($sSsoHash));
 			if (!empty($sSsoSubData))
 			{
-				$mData = \RainLoop\Utils::DecodeKeyValues($sSsoSubData);
+				$mData = \RainLoop\Utils::DecodeKeyValuesQ($sSsoSubData);
 				$this->Cacher()->Delete(\RainLoop\KeyPathHelper::SsoCacherKey($sSsoHash));
 
 				if (\is_array($mData) && !empty($mData['Email']) && isset($mData['Password'], $mData['Time']) &&
@@ -895,9 +954,40 @@ class ServiceActions
 					$sEmail = \trim($mData['Email']);
 					$sPassword = $mData['Password'];
 
+					$aAdditionalOptions = isset($mData['AdditionalOptions']) && \is_array($mData['AdditionalOptions']) &&
+						0 < \count($mData['AdditionalOptions']) ? $mData['AdditionalOptions'] : null;
+
 					try
 					{
 						$oAccount = $this->oActions->LoginProcess($sEmail, $sPassword);
+
+						if ($oAccount instanceof \RainLoop\Model\Account && $aAdditionalOptions)
+						{
+							$bNeedToSettings = false;
+
+							$oSettings = $this->SettingsProvider()->Load($oAccount);
+							if ($oSettings)
+							{
+								$sLanguage = isset($aAdditionalOptions['Language']) ?
+									$aAdditionalOptions['Language'] : '';
+
+								if ($sLanguage)
+								{
+									$sLanguage = $this->oActions->ValidateLanguage($sLanguage);
+									if ($sLanguage !== $oSettings->GetConf('Language', ''))
+									{
+										$bNeedToSettings = true;
+										$oSettings->SetConf('Language', $sLanguage);
+									}
+								}
+							}
+
+							if ($bNeedToSettings)
+							{
+								$this->SettingsProvider()->Save($oAccount, $oSettings);
+							}
+						}
+
 						$this->oActions->AuthToken($oAccount);
 
 						$bLogout = !($oAccount instanceof \RainLoop\Model\Account);
@@ -959,6 +1049,8 @@ class ServiceActions
 	 */
 	public function ServiceExternalLogin()
 	{
+		$this->oHttp->ServerNoCache();
+
 		$oException = null;
 		$oAccount = null;
 		$bLogout = true;
@@ -1025,6 +1117,8 @@ class ServiceActions
 	 */
 	public function ServiceExternalSso()
 	{
+		$this->oHttp->ServerNoCache();
+
 		$sResult = '';
 		$bLogout = true;
 		$sKey = $this->oActions->Config()->Get('labs', 'external_sso_key', '');
@@ -1061,14 +1155,13 @@ class ServiceActions
 		return $sResult;
 	}
 
-	/**
-	 * @return string
-	 */
-	public function ServiceChange()
+	private function changeAction()
 	{
+		$this->oHttp->ServerNoCache();
+
 		$oAccount = $this->oActions->GetAccount();
 
-		if ($oAccount && $this->oActions->GetCapa(false, \RainLoop\Enumerations\Capa::ADDITIONAL_ACCOUNTS, $oAccount))
+		if ($oAccount && $this->oActions->GetCapa(false, false, \RainLoop\Enumerations\Capa::ADDITIONAL_ACCOUNTS, $oAccount))
 		{
 			$oAccountToLogin = null;
 			$sEmail = empty($this->aPaths[2]) ? '' : \urldecode(\trim($this->aPaths[2]));
@@ -1088,7 +1181,14 @@ class ServiceActions
 				$this->oActions->AuthToken($oAccountToLogin);
 			}
 		}
+	}
 
+	/**
+	 * @return string
+	 */
+	public function ServiceChange()
+	{
+		$this->changeAction();
 		$this->oActions->Location('./');
 		return '';
 	}
@@ -1126,10 +1226,11 @@ class ServiceActions
 
 	/**
 	 * @param bool $bAdmin = true
+	 * @param string $sAdd = ''
 	 *
 	 * @return string
 	 */
-	private function localAppData($bAdmin = false)
+	private function localAppData($bAdmin = false, $sAdd = '')
 	{
 		@\header('Content-Type: application/javascript; charset=utf-8');
 		$this->oHttp->ServerNoCache();
@@ -1167,7 +1268,9 @@ class ServiceActions
 			$this->oActions->SetSpecAuthToken($sAuthAccountHash);
 		}
 
-		$sResult = $this->compileAppData($this->oActions->AppData($bAdmin, $sAuthAccountHash), false);
+		$sResult = $this->compileAppData($this->oActions->AppData($bAdmin,
+			0 === \strpos($sAdd, 'mobile'), '1' === \substr($sAdd, -1),
+			$sAuthAccountHash), false);
 
 		$this->Logger()->Write($sResult, \MailSo\Log\Enumerations\Type::INFO, 'APPDATA');
 
@@ -1182,35 +1285,66 @@ class ServiceActions
 	 */
 	public function compileTemplates($bAdmin = false, $bJsOutput = true)
 	{
-		$sHtml =
-			\RainLoop\Utils::CompileTemplates(APP_VERSION_ROOT_PATH.'app/templates/Views/Components', $this->oActions, 'Component').
-			\RainLoop\Utils::CompileTemplates(APP_VERSION_ROOT_PATH.'app/templates/Views/'.($bAdmin ? 'Admin' : 'User'), $this->oActions).
-			\RainLoop\Utils::CompileTemplates(APP_VERSION_ROOT_PATH.'app/templates/Views/Common', $this->oActions).
-			$this->oActions->Plugins()->CompileTemplate($bAdmin);
+		$aTemplates = array();
+
+		\RainLoop\Utils::CompileTemplates($aTemplates, APP_VERSION_ROOT_PATH.'app/templates/Views/Components', 'Component');
+		\RainLoop\Utils::CompileTemplates($aTemplates, APP_VERSION_ROOT_PATH.'app/templates/Views/'.($bAdmin ? 'Admin' : 'User'));
+		\RainLoop\Utils::CompileTemplates($aTemplates, APP_VERSION_ROOT_PATH.'app/templates/Views/Common');
+
+		$this->oActions->Plugins()->CompileTemplate($aTemplates, $bAdmin);
+
+		$sHtml = '';
+		foreach ($aTemplates as $sName => $sFile)
+		{
+			$sName = \preg_replace('/[^a-zA-Z0-9]/', '', $sName);
+			$sHtml .= '<script id="'.$sName.'" type="text/html" data-cfasync="false">'.
+				$this->oActions->ProcessTemplate($sName, \file_get_contents($sFile)).'</script>';
+		}
+
+		unset($aTemplates);
 
 		return $bJsOutput ? 'window.rainloopTEMPLATES='.\MailSo\Base\Utils::Php2js(array($sHtml), $this->Logger()).';' : $sHtml;
 	}
 
 	/**
 	 * @param string $sLanguage
+	 *
+	 * @return string
+	 */
+	private function convertLanguageNameToMomentLanguageName($sLanguage)
+	{
+		$aHelper = array('en_gb' => 'en-gb', 'fr_ca' => 'fr-ca', 'pt_br' => 'pt-br',
+			'uk_ua' => 'ua', 'zh_cn' => 'zh-cn', 'zh_tw' => 'zh-tw', 'fa_ir' => 'fa');
+
+		return isset($aHelper[$sLanguage]) ? $aHelper[$sLanguage] : \substr($sLanguage, 0, 2);
+	}
+
+	/**
+	 * @param string $sLanguage
+	 * @param bool $bAdmin = false
 	 * @param bool $bWrapByScriptTag = true
 	 *
 	 * @return string
 	 */
-	private function compileLanguage($sLanguage, $bWrapByScriptTag = true)
+	private function compileLanguage($sLanguage, $bAdmin = false, $bWrapByScriptTag = true)
 	{
 		$aResultLang = array();
 
-		$sMoment = 'window.moment && window.moment.lang && window.moment.lang(\'en\');';
-		$sMomentFileName = APP_VERSION_ROOT_PATH.'app/i18n/moment/'.$sLanguage.'.js';
+		$sMoment = 'window.moment && window.moment.locale && window.moment.locale(\'en\');';
+		$sMomentFileName = APP_VERSION_ROOT_PATH.'app/localization/moment/'.
+			$this->convertLanguageNameToMomentLanguageName($sLanguage).'.js';
+
 		if (\file_exists($sMomentFileName))
 		{
 			$sMoment = \file_get_contents($sMomentFileName);
 			$sMoment = \preg_replace('/\/\/[^\n]+\n/', '', $sMoment);
 		}
 
-		\RainLoop\Utils::ReadAndAddLang(APP_VERSION_ROOT_PATH.'app/i18n/langs.ini', $aResultLang);
-		\RainLoop\Utils::ReadAndAddLang(APP_VERSION_ROOT_PATH.'langs/'.$sLanguage.'.ini', $aResultLang);
+		\RainLoop\Utils::ReadAndAddLang(APP_VERSION_ROOT_PATH.'app/localization/langs.yml', $aResultLang);
+		\RainLoop\Utils::ReadAndAddLang(APP_VERSION_ROOT_PATH.'app/localization/'.
+			($bAdmin ? 'admin' : 'webmail').'/_source.en.yml', $aResultLang);
+		\RainLoop\Utils::ReadAndAddLang(APP_VERSION_ROOT_PATH.'app/localization/'.
+			($bAdmin ? 'admin' : 'webmail').'/'.$sLanguage.'.yml', $aResultLang);
 
 		$this->Plugins()->ReadLang($sLanguage, $aResultLang);
 
@@ -1219,6 +1353,10 @@ class ServiceActions
 		foreach ($aLangKeys as $sKey)
 		{
 			$sString = isset($aResultLang[$sKey]) ? $aResultLang[$sKey] : $sKey;
+			if (\is_array($sString))
+			{
+				$sString = \implode("\n", $sString);
+			}
 
 			$sLangJs .= '"'.\str_replace('"', '\\"', \str_replace('\\', '\\\\', $sKey)).'":'
 				.'"'.\str_replace(array("\r", "\n", "\t"), array('\r', '\n', '\t'),
@@ -1243,9 +1381,8 @@ class ServiceActions
 	private function compileAppData($aAppData, $bWrapByScriptTag = true)
 	{
 		return
-			($bWrapByScriptTag ? '<script data-cfasync="false">' : '').
-			'window.rainloopAppData='.\json_encode($aAppData).';'.
-			'if(window.__rlah_set){__rlah_set()};'.
+			($bWrapByScriptTag ? '<script type="text/javascript" data-cfasync="false">' : '').
+			'if(window.__initAppData){window.__initAppData('.\json_encode($aAppData).');}'.
 			($bWrapByScriptTag ? '</script>' : '')
 		;
 	}

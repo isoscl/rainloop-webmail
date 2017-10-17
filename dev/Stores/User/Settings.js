@@ -1,80 +1,83 @@
 
-(function () {
+import window from 'window';
+import ko from 'ko';
 
-	'use strict';
+import {MESSAGES_PER_PAGE, MESSAGES_PER_PAGE_VALUES} from 'Common/Consts';
+import {Layout, EditorDefaultType, Magics} from 'Common/Enums';
+import {$html} from 'Common/Globals';
+import {pInt} from 'Common/Utils';
+import * as Events from 'Common/Events';
 
-	var
-		ko = require('ko'),
+import * as Settings from 'Storage/Settings';
 
-		Consts = require('Common/Consts'),
-		Enums = require('Common/Enums'),
-		Globals = require('Common/Globals'),
-		Utils = require('Common/Utils'),
-		Events = require('Common/Events'),
+class SettingsUserStore
+{
+	constructor() {
 
-		Settings = require('Storage/Settings')
-	;
+		this.iAutoLogoutTimer = 0;
 
-	/**
-	 * @constructor
-	 */
-	function SettingsUserStore()
-	{
-		this.layout = ko.observable(Enums.Layout.SidePreview)
-			.extend({'limitedList': [
-				Enums.Layout.SidePreview, Enums.Layout.BottomPreview, Enums.Layout.NoPreview
+		this.layout = ko.observable(Layout.SidePreview)
+			.extend({limitedList: [Layout.SidePreview, Layout.BottomPreview, Layout.NoPreview]});
+
+		this.editorDefaultType = ko.observable(EditorDefaultType.Html)
+			.extend({limitedList: [
+				EditorDefaultType.Html, EditorDefaultType.Plain,
+				EditorDefaultType.HtmlForced, EditorDefaultType.PlainForced
 			]});
 
-		this.editorDefaultType = ko.observable(Enums.EditorDefaultType.Html)
-			.extend({'limitedList': [
-				Enums.EditorDefaultType.Html, Enums.EditorDefaultType.Plain,
-				Enums.EditorDefaultType.HtmlForced, Enums.EditorDefaultType.PlainForced
-			]});
-
-		this.messagesPerPage = ko.observable(Consts.Defaults.MessagesPerPage)
-			.extend({'limitedList': Consts.Defaults.MessagesPerPageArray});
+		this.messagesPerPage = ko.observable(MESSAGES_PER_PAGE)
+			.extend({limitedList: MESSAGES_PER_PAGE_VALUES});
 
 		this.showImages = ko.observable(false);
 		this.useCheckboxesInList = ko.observable(true);
+		this.allowDraftAutosave = ko.observable(true);
 		this.useThreads = ko.observable(false);
 		this.replySameFolder = ko.observable(false);
 
-		this.computedProperies();
-		this.subscribes();
+		this.autoLogout = ko.observable(Magics.Time30mInMin);
+
+		this.computers();
+		this.subscribers();
 	}
 
-	SettingsUserStore.prototype.computedProperies = function ()
-	{
-		this.usePreviewPane = ko.computed(function () {
-			return Enums.Layout.NoPreview !== this.layout();
-		}, this);
-	};
+	computers() {
+		this.usePreviewPane = ko.computed(() => Layout.NoPreview !== this.layout());
+	}
 
-	SettingsUserStore.prototype.subscribes = function ()
-	{
-		this.layout.subscribe(function (nValue) {
-
-			Globals.$html.toggleClass('rl-no-preview-pane', Enums.Layout.NoPreview === nValue);
-			Globals.$html.toggleClass('rl-side-preview-pane', Enums.Layout.SidePreview === nValue);
-			Globals.$html.toggleClass('rl-bottom-preview-pane', Enums.Layout.BottomPreview === nValue);
-
-			Events.pub('layout', [nValue]);
+	subscribers() {
+		this.layout.subscribe((value) => {
+			$html.toggleClass('rl-no-preview-pane', Layout.NoPreview === value);
+			$html.toggleClass('rl-side-preview-pane', Layout.SidePreview === value);
+			$html.toggleClass('rl-bottom-preview-pane', Layout.BottomPreview === value);
+			Events.pub('layout', [value]);
 		});
-	};
+	}
 
-	SettingsUserStore.prototype.populate = function ()
-	{
-		this.layout(Utils.pInt(Settings.settingsGet('Layout')));
+	populate() {
+		this.layout(pInt(Settings.settingsGet('Layout')));
 		this.editorDefaultType(Settings.settingsGet('EditorDefaultType'));
 
+		this.autoLogout(pInt(Settings.settingsGet('AutoLogout')));
 		this.messagesPerPage(Settings.settingsGet('MPP'));
 
 		this.showImages(!!Settings.settingsGet('ShowImages'));
 		this.useCheckboxesInList(!!Settings.settingsGet('UseCheckboxesInList'));
+		this.allowDraftAutosave(!!Settings.settingsGet('AllowDraftAutosave'));
 		this.useThreads(!!Settings.settingsGet('UseThreads'));
 		this.replySameFolder(!!Settings.settingsGet('ReplySameFolder'));
-	};
 
-	module.exports = new SettingsUserStore();
+		Events.sub('rl.auto-logout-refresh', () => {
+			window.clearTimeout(this.iAutoLogoutTimer);
+			if (0 < this.autoLogout() && !Settings.settingsGet('AccountSignMe'))
+			{
+				this.iAutoLogoutTimer = window.setTimeout(() => {
+					Events.pub('rl.auto-logout');
+				}, this.autoLogout() * Magics.Time1m);
+			}
+		});
 
-}());
+		Events.pub('rl.auto-logout-refresh');
+	}
+}
+
+export default new SettingsUserStore();

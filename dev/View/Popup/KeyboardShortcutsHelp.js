@@ -1,64 +1,54 @@
 
-(function () {
+import _ from '_';
+import key from 'key';
 
-	'use strict';
+import {KeyState, Magics} from 'Common/Enums';
 
-	var
-		_ = require('_'),
-		key = require('key'),
+import {popup} from 'Knoin/Knoin';
+import {AbstractViewNext} from 'Knoin/AbstractViewNext';
 
-		Enums = require('Common/Enums'),
-
-		kn = require('Knoin/Knoin'),
-		AbstractView = require('Knoin/AbstractView')
-	;
-
-	/**
-	 * @constructor
-	 * @extends AbstractView
-	 */
-	function KeyboardShortcutsHelpPopupView()
-	{
-		AbstractView.call(this, 'Popups', 'PopupsKeyboardShortcutsHelp');
-
-		this.sDefaultKeyScope = Enums.KeyState.PopupKeyboardShortcutsHelp;
-
-		kn.constructorEnd(this);
+@popup({
+	name: 'View/Popup/KeyboardShortcutsHelp',
+	templateID: 'PopupsKeyboardShortcutsHelp'
+})
+class KeyboardShortcutsHelpPopupView extends AbstractViewNext
+{
+	constructor() {
+		super();
+		this.sDefaultKeyScope = KeyState.PopupKeyboardShortcutsHelp;
 	}
 
-	kn.extendAsViewModel(['View/Popup/KeyboardShortcutsHelp', 'PopupsKeyboardShortcutsHelpViewModel'], KeyboardShortcutsHelpPopupView);
-	_.extend(KeyboardShortcutsHelpPopupView.prototype, AbstractView.prototype);
+	onBuild(dom) {
+		key('tab, shift+tab, left, right', KeyState.PopupKeyboardShortcutsHelp, _.throttle((event, handler) => {
 
-	KeyboardShortcutsHelpPopupView.prototype.onBuild = function (oDom)
-	{
-		key('tab, shift+tab, left, right', Enums.KeyState.PopupKeyboardShortcutsHelp, _.throttle(_.bind(function (event, handler) {
 			if (event && handler)
 			{
-				var
-					$tabs = oDom.find('.nav.nav-tabs > li'),
-					bNext = handler && ('tab' === handler.shortcut || 'right' === handler.shortcut),
-					iIndex = $tabs.index($tabs.filter('.active'))
-				;
+				const
+					$tabs = dom.find('.nav.nav-tabs > li'),
+					isNext = handler && ('tab' === handler.shortcut || 'right' === handler.shortcut);
 
-				if (!bNext && iIndex > 0)
+				let index = $tabs.index($tabs.filter('.active'));
+				if (!isNext && 0 < index)
 				{
-					iIndex--;
+					index -= 1;
 				}
-				else if (bNext && iIndex < $tabs.length - 1)
+				else if (isNext && index < $tabs.length - 1)
 				{
-					iIndex++;
+					index += 1;
 				}
 				else
 				{
-					iIndex = bNext ? 0 : $tabs.length - 1;
+					index = isNext ? 0 : $tabs.length - 1;
 				}
 
-				$tabs.eq(iIndex).find('a[data-toggle="tab"]').tab('show');
+				$tabs.eq(index).find('a[data-toggle="tab"]').tab('show');
 				return false;
 			}
-		}, this), 100));
-	};
 
-	module.exports = KeyboardShortcutsHelpPopupView;
+			return true;
 
-}());
+		}, Magics.Time100ms));
+	}
+}
+
+export {KeyboardShortcutsHelpPopupView, KeyboardShortcutsHelpPopupView as default};

@@ -362,7 +362,27 @@ class Account extends \RainLoop\Account // for backward compatibility
 			\RainLoop\Utils::GetShortToken(),	// 7
 			$this->sProxyAuthUser,				// 8
 			$this->sProxyAuthPassword,			// 9
-			0									// 10
+			0									// 10 // timelife
+		));
+	}
+
+	/**
+	 * @return string
+	 */
+	public function GetAuthTokenQ()
+	{
+		return \RainLoop\Utils::EncodeKeyValuesQ(array(
+			'token',							// 0
+			$this->sEmail,						// 1
+			$this->sLogin,						// 2
+			$this->sPassword,					// 3
+			\RainLoop\Utils::Fingerprint(),		// 4
+			$this->sSignMeToken,				// 5
+			$this->sParentEmail,				// 6
+			\RainLoop\Utils::GetShortToken(),	// 7
+			$this->sProxyAuthUser,				// 8
+			$this->sProxyAuthPassword,			// 9
+			0									// 10 // timelife
 		));
 	}
 
@@ -389,7 +409,8 @@ class Account extends \RainLoop\Account // for backward compatibility
 			'ProxyAuthPassword' => $this->ProxyAuthPassword(),
 			'VerifySsl' => !!$oConfig->Get('ssl', 'verify_certificate', false),
 			'AllowSelfSigned' => !!$oConfig->Get('ssl', 'allow_self_signed', true),
-			'UseAuthPlainIfSupported' => !!$oConfig->Get('labs', 'use_imap_auth_plain')
+			'UseAuthPlainIfSupported' => !!$oConfig->Get('labs', 'imap_use_auth_plain', true),
+			'UseAuthCramMd5IfSupported' => !!$oConfig->Get('labs', 'imap_use_auth_cram_md5', true)
 		);
 
 		$oPlugins->RunHook('filter.imap-credentials', array($this, &$aImapCredentials));
@@ -413,12 +434,22 @@ class Account extends \RainLoop\Account // for backward compatibility
 			{
 				$oMailClient
 					->Login($aImapCredentials['ProxyAuthUser'], $aImapCredentials['ProxyAuthPassword'],
-						$aImapCredentials['Login'], $aImapCredentials['UseAuthPlainIfSupported']);
+						$aImapCredentials['Login'], $aImapCredentials['UseAuthPlainIfSupported'], $aImapCredentials['UseAuthCramMd5IfSupported']);
 			}
 			else
 			{
-				$oMailClient->Login($aImapCredentials['Login'], $aImapCredentials['Password'], '',
-					$aImapCredentials['UseAuthPlainIfSupported']);
+				$iGatLen = \strlen(APP_GOOGLE_ACCESS_TOKEN_PREFIX);
+				$sPassword = $aImapCredentials['Password'];
+				if (APP_GOOGLE_ACCESS_TOKEN_PREFIX === \substr($sPassword, 0, $iGatLen))
+				{
+					$oMailClient->LoginWithXOauth2(
+						\base64_encode('user='.$aImapCredentials['Login']."\1".'auth=Bearer '.\substr($sPassword, $iGatLen)."\1\1"));
+				}
+				else
+				{
+					$oMailClient->Login($aImapCredentials['Login'], $aImapCredentials['Password'], '',
+						$aImapCredentials['UseAuthPlainIfSupported'], $aImapCredentials['UseAuthCramMd5IfSupported']);
+				}
 			}
 
 			$bLogin = true;
@@ -454,7 +485,9 @@ class Account extends \RainLoop\Account // for backward compatibility
 			'ProxyAuthUser' => $this->ProxyAuthUser(),
 			'ProxyAuthPassword' => $this->ProxyAuthPassword(),
 			'VerifySsl' => !!$oConfig->Get('ssl', 'verify_certificate', false),
-			'AllowSelfSigned' => !!$oConfig->Get('ssl', 'allow_self_signed', true)
+			'AllowSelfSigned' => !!$oConfig->Get('ssl', 'allow_self_signed', true),
+			'UseAuthPlainIfSupported' => !!$oConfig->Get('labs', 'smtp_use_auth_plain', true),
+			'UseAuthCramMd5IfSupported' => !!$oConfig->Get('labs', 'smtp_use_auth_cram_md5', true)
 		);
 
 		$oPlugins->RunHook('filter.smtp-credentials', array($this, &$aSmtpCredentials));
@@ -475,7 +508,18 @@ class Account extends \RainLoop\Account // for backward compatibility
 
 		if ($aSmtpCredentials['UseAuth'] && !$aSmtpCredentials['UsePhpMail'] && $oSmtpClient)
 		{
-			$oSmtpClient->Login($aSmtpCredentials['Login'], $aSmtpCredentials['Password']);
+			$iGatLen = \strlen(APP_GOOGLE_ACCESS_TOKEN_PREFIX);
+			$sPassword = $aSmtpCredentials['Password'];
+			if (APP_GOOGLE_ACCESS_TOKEN_PREFIX === \substr($sPassword, 0, $iGatLen))
+			{
+				$oSmtpClient->LoginWithXOauth2(
+					\base64_encode('user='.$aSmtpCredentials['Login']."\1".'auth=Bearer '.\substr($sPassword, $iGatLen)."\1\1"));
+			}
+			else
+			{
+				$oSmtpClient->Login($aSmtpCredentials['Login'], $aSmtpCredentials['Password'],
+					$aSmtpCredentials['UseAuthPlainIfSupported'], $aSmtpCredentials['UseAuthCramMd5IfSupported']);
+			}
 
 			$bLogin = true;
 		}
@@ -503,18 +547,24 @@ class Account extends \RainLoop\Account // for backward compatibility
 			'Login' => $this->IncLogin(),
 			'Password' => $this->Password(),
 			'VerifySsl' => !!$oConfig->Get('ssl', 'verify_certificate', false),
-			'AllowSelfSigned' => !!$oConfig->Get('ssl', 'allow_self_signed', true)
+			'AllowSelfSigned' => !!$oConfig->Get('ssl', 'allow_self_signed', true),
+			'InitialAuthPlain' => !!$oConfig->Get('ssl', 'sieve_auth_plain_initial', true)
 		);
 
 		$oPlugins->RunHook('filter.sieve-credentials', array($this, &$aSieveCredentials));
 
 		$oPlugins->RunHook('event.sieve-pre-connect', array($this, $aSieveCredentials['UseConnect'], $aSieveCredentials));
 
-		if ($aSieveCredentials['UseConnect'] && $oSieveClient)
+		if ($oSieveClient)
 		{
-			$oSieveClient->Connect($aSieveCredentials['Host'], $aSieveCredentials['Port'],
-				$aSieveCredentials['Secure'], $aSieveCredentials['VerifySsl'], $aSieveCredentials['AllowSelfSigned']
-			);
+			$oSieveClient->__USE_INITIAL_AUTH_PLAIN_COMMAND = $aSieveCredentials['InitialAuthPlain'];
+
+			if ($aSieveCredentials['UseConnect'])
+			{
+				$oSieveClient->Connect($aSieveCredentials['Host'], $aSieveCredentials['Port'],
+					$aSieveCredentials['Secure'], $aSieveCredentials['VerifySsl'], $aSieveCredentials['AllowSelfSigned']
+				);
+			}
 		}
 
 		$oPlugins->RunHook('event.sieve-post-connect', array($this, $aSieveCredentials['UseConnect'], $aSieveCredentials));

@@ -1,30 +1,19 @@
 
-(function () {
+import {pInt} from 'Common/Utils';
+import {SaveSettingsStep} from 'Common/Enums';
+import {AbstractComponent, componentExportHelper} from 'Component/Abstract';
 
-	'use strict';
-
-	var
-		_ = require('_'),
-
-		Enums = require('Common/Enums'),
-		Utils = require('Common/Utils'),
-
-		AbstractComponent = require('Component/Abstract')
-	;
-
+class SaveTriggerComponent extends AbstractComponent
+{
 	/**
-	 * @constructor
-	 *
-	 * @param {Object} oParams
-	 *
-	 * @extends AbstractComponent
+	 * @param {Object} params
 	 */
-	function SaveTriggerComponent(oParams)
-	{
-		AbstractComponent.call(this);
+	constructor(params) {
 
-		this.element = oParams.element || null;
-		this.value = oParams.value && oParams.value.subscribe ? oParams.value : null;
+		super();
+
+		this.element = params.element || null;
+		this.value = params.value && params.value.subscribe ? params.value : null;
 
 		if (this.element)
 		{
@@ -32,9 +21,9 @@
 			{
 				this.element.css('display', 'inline-block');
 
-				if (oParams.verticalAlign)
+				if (params.verticalAlign)
 				{
-					this.element.css('vertical-align', oParams.verticalAlign);
+					this.element.css('vertical-align', params.verticalAlign);
 				}
 
 				this.setState(this.value());
@@ -50,45 +39,37 @@
 		}
 	}
 
-	SaveTriggerComponent.prototype.setState = function (nValue)
-	{
-		switch (Utils.pInt(nValue))
+	setState(value) {
+
+		switch (pInt(value))
 		{
-			case Enums.SaveSettingsStep.TrueResult:
+			case SaveSettingsStep.TrueResult:
 				this.element
 					.find('.animated,.error').hide().removeClass('visible')
 					.end()
-					.find('.success').show().addClass('visible')
-				;
+					.find('.success').show().addClass('visible');
 				break;
-			case Enums.SaveSettingsStep.FalseResult:
+			case SaveSettingsStep.FalseResult:
 				this.element
 					.find('.animated,.success').hide().removeClass('visible')
 					.end()
-					.find('.error').show().addClass('visible')
-				;
+					.find('.error').show().addClass('visible');
 				break;
-			case Enums.SaveSettingsStep.Animate:
+			case SaveSettingsStep.Animate:
 				this.element
 					.find('.error,.success').hide().removeClass('visible')
 					.end()
-					.find('.animated').show().addClass('visible')
-				;
+					.find('.animated').show().addClass('visible');
 				break;
+			case SaveSettingsStep.Idle:
 			default:
-			case Enums.SaveSettingsStep.Idle:
 				this.element
 					.find('.animated').hide()
 					.end()
-					.find('.error,.success').removeClass('visible')
-				;
+					.find('.error,.success').removeClass('visible');
 				break;
 		}
-	};
+	}
+}
 
-	_.extend(SaveTriggerComponent.prototype, AbstractComponent.prototype);
-
-	module.exports = AbstractComponent.componentExportHelper(
-		SaveTriggerComponent, 'SaveTriggerComponent');
-
-}());
+export default componentExportHelper(SaveTriggerComponent, 'SaveTriggerComponent');

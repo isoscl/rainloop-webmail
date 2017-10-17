@@ -7,7 +7,7 @@ label {
 	cursor: pointer;
 }
 
-label.inline {
+label.inline, span.inline {
 	display: inline-block;
 }
 
@@ -67,16 +67,61 @@ select {
 	width: 223px;
 }
 
+.btn .svg-icon {
+	vertical-align: middle;
+}
+
 .btn-small.btn-small-small {
 	padding: 3px 9px;
 	font-size: 11px;
 	line-height: 11px;
 }
 
+.btn.btn-thin {
+	padding: 4px 9px;
+}
+
+.btn.btn-thin-2 {
+	padding: 4px 7px;
+}
+
+.btn.btn-nowrap {
+	white-space: nowrap;
+}
+
 .btn.btn-ellipsis {
 	text-overflow: ellipsis;
 	overflow: hidden;
 	white-space: nowrap;
+}
+
+.btn.btn-transparent {
+	background: none !important;
+	border-color: transparent !important;
+	text-shadow: none !important;
+	box-shadow: none !important;
+	opacity: .6;
+
+	[class^="icon-"] {
+		width: 19px;
+		height: 19px;
+		line-height: 20px;
+		font-size: 19px;
+	}
+
+	&:hover {
+		opacity: 1;
+	}
+}
+
+.btn-group.open .btn.btn-transparent.dropdown-toggle {
+	color: #BD362F;
+	.caret {
+		border-top-color: #BD362F;
+	}
+	[class^="icon-"]:before {
+		color: #BD362F;
+	}
 }
 
 .btn.btn-narrow {
@@ -101,22 +146,30 @@ select {
 }
 
 .btn {
-	border-radiu: @btnBorderRadius;
+	border-radius: @btnBorderRadius;
 	background-image: none;
 	padding-left: 13px;
 	padding-right: 13px;
 
 	&.disabled, &[disabled] {
-		opacity: 0.75;
+		opacity: 0.8;
 		box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 1px 2px rgba(0,0,0,.05);
 	}
 
-	text-shadow: 0 1px 0 #fff;
 	border-color: rgba(0, 0, 0, 0.25) rgba(0, 0, 0, 0.25) rgba(0, 0, 0, 0.25);
 
 //	&:active {
 //		.box-shadow(~"inset 0 2px 4px rgba(0,0,0,.3), 0 0 0 rgba(0,0,0,.1)");
 //	}
+
+	html.textshadow &{
+
+		text-shadow: 0 1px 0 #fff;
+
+		&.btn-danger, &.btn-success, &.btn-primary, &.btn-warning {
+			text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+		}
+	}
 }
 
 .btn.btn-dark-disabled-border {
@@ -131,10 +184,8 @@ select {
 //  }
 //}
 
-html.rgba.textshadow {
-	.btn.btn-danger, .btn.btn-success, .btn.btn-primary {
-		text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
-	}
+.btn.btn-success {
+    background-color: #84AB04;
 }
 
 .btn-toolbar {
@@ -157,9 +208,6 @@ html.rgba.textshadow {
 		opacity: 1;
 	}
 
-	.tooltip-class {
-	}
-
 	.tooltip-inner {
 		max-width: 380px;
 		text-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
@@ -176,26 +224,46 @@ html.rgba.textshadow {
 	}
 }
 
-// Set corners individual because sometimes a single button can be in a .btn-group and we need :first-child and :last-child to both match
-.btn-group > .btn:first-child {
-	border-top-left-radius: @btnBorderRadius;
-	border-bottom-left-radius: @btnBorderRadius;
+.popover {
+    width: auto;
+    min-width: 250px;
+    max-width: 550px;
+
+    .popover-content pre {
+        border: none;
+        background: rgba(0, 0, 0, 0);
+        padding: 0;
+        word-break: normal;
+    }
 }
-// Need .dropdown-toggle since :last-child doesn't apply given a .dropdown-menu immediately after it
-.btn-group > .btn:last-child,
-.btn-group > .dropdown-toggle {
-	border-top-right-radius: @btnBorderRadius;
-	border-bottom-right-radius: @btnBorderRadius;
+
+.btn-group > .btn {
+	border-radius: 0 !important;
 }
-// Reset corners for large buttons
-.btn-group > .btn.large:first-child {
-	border-top-left-radius: @btnBorderRadius;
-	border-bottom-left-radius: @btnBorderRadius;
+
+.btn-group > .btn.single {
+	border-radius: @btnBorderRadius !important;
 }
-.btn-group > .btn.large:last-child,
-.btn-group > .large.dropdown-toggle {
-	border-top-right-radius: @btnBorderRadius;
-	border-bottom-right-radius: @btnBorderRadius;
+
+.btn-group > .btn.first {
+	border-top-left-radius: @btnBorderRadius !important;
+	border-bottom-left-radius: @btnBorderRadius !important;
+}
+
+.btn-group > .btn.last {
+	border-top-right-radius: @btnBorderRadius !important;
+	border-bottom-right-radius: @btnBorderRadius !important;
+}
+
+.btn-group + .btn-group {
+	margin-left: 0;
+}
+
+.btn-group {
+	margin-right: 3px;
+}
+.btn-group.btn-group-last {
+	margin-right: 0;
 }
 
 .dropdown.colored-toggle.open .btn.dropdown-toggle {
@@ -303,6 +371,10 @@ html.no-rgba .modal {
 	top: 0;
 }
 
+.modal-backdrop {
+	.g-ui-user-select-none();
+}
+
 .modal.loginContent .modal-body, .modal.loginAdminContent .modal-body {
 	background-color: transparent !important;
 }
@@ -326,4 +398,55 @@ html.no-rgba .modal {
 
 .control-label.remove-padding-top {
 	padding-top: 0;
+}
+
+html.rl-mobile {
+
+	.popups .modal {
+		width: 100% !important;
+		width: calc(~'100% - 20px') !important;
+	}
+
+	.b-settings-content {
+		padding: 10px;
+		padding-left: 20px;
+	}
+
+	.list-table {
+		width: 100%;
+		max-width: 100%;
+	}
+
+	.form-horizontal {
+		.control-group {
+			.control-label {
+				text-align: left;
+				float: none;
+			}
+			.controls {
+				margin-left: 0;
+			}
+		}
+	}
+}
+.close-input-wrp {
+	display: inline-block;
+	position: relative;
+
+	input {
+		padding-right: 15px;
+	}
+
+	.close {
+		position: absolute;
+		right: 0;
+		top: 5px;
+		margin: 0 7px;
+		z-index: 100;
+		vertical-align: middle;
+		opacity: .4;
+		&:hover {
+			opacity: .6;
+		}
+	}
 }

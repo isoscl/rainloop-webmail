@@ -1,166 +1,138 @@
 
-(function () {
+import window from 'window';
+import _ from '_';
+import ko from 'ko';
 
-	'use strict';
+import {Capa, StorageResultType} from 'Common/Enums';
+import {root} from 'Common/Links';
 
-	var
-		window = require('window'),
-		_ = require('_'),
-		ko = require('ko'),
+import {capa} from 'Storage/Settings';
 
-		Enums = require('Common/Enums'),
-		Translator = require('Common/Translator'),
-		Links = require('Common/Links'),
+import AccountStore from 'Stores/User/Account';
+import IdentityStore from 'Stores/User/Identity';
+import Remote from 'Remote/User/Ajax';
 
-		AccountStore = require('Stores/User/Account'),
-		IdentityStore = require('Stores/User/Identity'),
+import {getApp} from 'Helper/Apps/User';
 
-		Remote = require('Storage/User/Remote')
-	;
+import {showScreenPopup, routeOff, setHash} from 'Knoin/Knoin';
 
-	/**
-	 * @constructor
-	 */
-	function AccountsUserSettings()
-	{
+class AccountsUserSettings
+{
+	constructor() {
+		this.allowAdditionalAccount = capa(Capa.AdditionalAccounts);
+		this.allowIdentities = capa(Capa.Identities);
+
 		this.accounts = AccountStore.accounts;
 		this.identities = IdentityStore.identities;
-
-		this.processText = ko.computed(function () {
-			return AccountStore.accounts.loading() ? Translator.i18n('SETTINGS_ACCOUNTS/LOADING_PROCESS') : '';
-		}, this);
-
-		this.visibility = ko.computed(function () {
-			return '' === this.processText() ? 'hidden' : 'visible';
-		}, this);
 
 		this.accountForDeletion = ko.observable(null).deleteAccessHelper();
 		this.identityForDeletion = ko.observable(null).deleteAccessHelper();
 	}
 
-	AccountsUserSettings.prototype.scrollableOptions = function ()
-	{
+	scrollableOptions(wrapper) {
 		return {
-			handle: '.drag-handle'
+			handle: '.drag-handle',
+			containment: wrapper || 'parent',
+			axis: 'y'
 		};
-	};
+	}
 
-	AccountsUserSettings.prototype.addNewAccount = function ()
-	{
-		require('Knoin/Knoin').showScreenPopup(require('View/Popup/Account'));
-	};
+	addNewAccount() {
+		showScreenPopup(require('View/Popup/Account'));
+	}
 
-	AccountsUserSettings.prototype.editAccount = function (oAccountItem)
-	{
-		if (oAccountItem && oAccountItem.canBeEdit())
+	editAccount(account) {
+		if (account && account.canBeEdit())
 		{
-			require('Knoin/Knoin').showScreenPopup(require('View/Popup/Account'), [oAccountItem]);
+			showScreenPopup(require('View/Popup/Account'), [account]);
 		}
-	};
+	}
 
-	AccountsUserSettings.prototype.addNewIdentity = function ()
-	{
-		require('Knoin/Knoin').showScreenPopup(require('View/Popup/Identity'));
-	};
+	addNewIdentity() {
+		showScreenPopup(require('View/Popup/Identity'));
+	}
 
-	AccountsUserSettings.prototype.editIdentity = function (oIdentity)
-	{
-		require('Knoin/Knoin').showScreenPopup(require('View/Popup/Identity'), [oIdentity]);
-	};
+	editIdentity(identity) {
+		showScreenPopup(require('View/Popup/Identity'), [identity]);
+	}
 
 	/**
-	 * @param {AccountModel} oAccountToRemove
+	 * @param {AccountModel} accountToRemove
+	 * @returns {void}
 	 */
-	AccountsUserSettings.prototype.deleteAccount = function (oAccountToRemove)
-	{
-		if (oAccountToRemove && oAccountToRemove.deleteAccess())
+	deleteAccount(accountToRemove) {
+		if (accountToRemove && accountToRemove.deleteAccess())
 		{
 			this.accountForDeletion(null);
-
-			var
-				kn = require('Knoin/Knoin'),
-				fRemoveAccount = function (oAccount) {
-					return oAccountToRemove === oAccount;
-				}
-			;
-
-			if (oAccountToRemove)
+			if (accountToRemove)
 			{
-				this.accounts.remove(fRemoveAccount);
+				this.accounts.remove((account) => accountToRemove === account);
 
-				Remote.accountDelete(function (sResult, oData) {
+				Remote.accountDelete((result, data) => {
 
-					if (Enums.StorageResultType.Success === sResult && oData &&
-						oData.Result && oData.Reload)
+					if (StorageResultType.Success === result && data && data.Result && data.Reload)
 					{
-						kn.routeOff();
-						kn.setHash(Links.root(), true);
-						kn.routeOff();
+						routeOff();
+						setHash(root(), true);
+						routeOff();
 
-						_.defer(function () {
-							window.location.reload();
-						});
+						_.defer(() => window.location.reload());
 					}
 					else
 					{
-						require('App/User').accountsAndIdentities();
+						getApp().accountsAndIdentities();
 					}
 
-				}, oAccountToRemove.email);
+				}, accountToRemove.email);
 			}
 		}
-	};
+	}
 
 	/**
-	 * @param {IdentityModel} oIdentityToRemove
+	 * @param {IdentityModel} identityToRemove
+	 * @returns {void}
 	 */
-	AccountsUserSettings.prototype.deleteIdentity = function (oIdentityToRemove)
-	{
-		if (oIdentityToRemove && oIdentityToRemove.deleteAccess())
+	deleteIdentity(identityToRemove) {
+		if (identityToRemove && identityToRemove.deleteAccess())
 		{
 			this.identityForDeletion(null);
 
-			if (oIdentityToRemove)
+			if (identityToRemove)
 			{
-				IdentityStore.identities.remove(function (oIdentity) {
-					return oIdentityToRemove === oIdentity;
-				});
+				IdentityStore.identities.remove((oIdentity) => identityToRemove === oIdentity);
 
-				Remote.identityDelete(function () {
-					require('App/User').accountsAndIdentities();
-				}, oIdentityToRemove.id);
+				Remote.identityDelete(() => {
+					getApp().accountsAndIdentities();
+				}, identityToRemove.id);
 			}
 		}
-	};
+	}
 
-	AccountsUserSettings.prototype.accountsAndIdentitiesAfterMove = function ()
-	{
+	accountsAndIdentitiesAfterMove() {
 		Remote.accountsAndIdentitiesSortOrder(null,
 			AccountStore.accountsEmails.peek(), IdentityStore.identitiesIDS.peek());
-	};
+	}
 
-	AccountsUserSettings.prototype.onBuild = function (oDom)
-	{
-		var self = this;
+	onBuild(oDom) {
+
+		const self = this;
 
 		oDom
-			.on('click', '.accounts-list .account-item .e-action', function () {
-				var oAccountItem = ko.dataFor(this);
-				if (oAccountItem)
+			.on('click', '.accounts-list .account-item .e-action', function() { // eslint-disable-line prefer-arrow-callback
+				const account = ko.dataFor(this); // eslint-disable-line no-invalid-this
+				if (account)
 				{
-					self.editAccount(oAccountItem);
+					self.editAccount(account);
 				}
 			})
-			.on('click', '.identities-list .identity-item .e-action', function () {
-				var oIdentityItem = ko.dataFor(this);
-				if (oIdentityItem)
+			.on('click', '.identities-list .identity-item .e-action', function() { // eslint-disable-line prefer-arrow-callback
+				const identity = ko.dataFor(this); // eslint-disable-line no-invalid-this
+				if (identity)
 				{
-					self.editIdentity(oIdentityItem);
+					self.editIdentity(identity);
 				}
-			})
-		;
-	};
+			});
+	}
+}
 
-	module.exports = AccountsUserSettings;
-
-}());
+export {AccountsUserSettings, AccountsUserSettings as default};

@@ -1,22 +1,29 @@
-RainLoop Webmail
-==================
+<div align="center">
+  <a href="https://github.com/RainLoop/rainloop-webmail">
+    <img width="200" heigth="200" src="https://www.rainloop.net/static/img/logo-256x256-tiny.png">
+  </a>
+  <br>
+  <h1>RainLoop Webmail</h1>
+  <br>
+  <p>
+    Simple, modern &amp; fast web-based email client.
+  </p>
+  <p>
+    Modest system requirements, decent performance, simple installation and upgrade, no database required
+    - all these make RainLoop Webmail a perfect choice for your email solution.
+  </p>
+  <h2></h2>
+  <br>
+</div>
 
-Simple, modern &amp; fast web-based email client.
+For more information about the product, check [rainloop.net](http://www.rainloop.net/).
 
-Modest system requirements, decent performance, simple installation and upgrade, no database required - all these make RainLoop Webmail a perfect choice for your email solution.
-
-For more information about the product, check [http://rainloop.net](http://rainloop.net).
-
-Information about installing the product, check the [documentation page](http://rainloop.net/docs/installation/).
-
-## Attention
-
-This is **NOT** a stable version of RainLoop Webmail.
-It's not recommended to use in production environment.
+Information about installing the product, check the [documentation page](http://www.rainloop.net/docs/installation/).
 
 ## License
 
-**Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported (CC BY-NC-SA 3.0)**
-http://creativecommons.org/licenses/by-nc-sa/3.0/
+**RainLoop Webmail (Community edition)** is released under
+**GNU AFFERO GENERAL PUBLIC LICENSE Version 3 (AGPL)**.
+http://www.gnu.org/licenses/agpl-3.0.html
 
-Copyright (c) 2015 Rainloop Team
+Copyright (c) 2017 Rainloop Team
